@@ -2,31 +2,14 @@
 
 Both run on Sunday evenings (America/New_York). Prompts below are what each task fires with.
 
-## 1. Publish announcements (cloud, no device needed) — Sundays 9:00 PM ET
+## 1. Publish announcements — Google Apps Script, Sundays 9–10 PM ET
 
-```
-You maintain northpointysa.com (GitHub repo Josephmt95/northpointysa, GitHub Pages).
-Task: publish this week's ward announcements to the site.
-
-1. Gmail: search `subject:"Northpoint YSA Ward Weekly Announcements" newer_than:4d -in:trash`.
-   If nothing is found, also try `from:noreply-lcr@mail.churchofjesuschrist.org newer_than:4d`.
-   If still nothing, stop and report "no announcements email this week".
-2. Take the newest message. Fetch it with get_message in RAW format (this includes the flyer
-   images). Save the raw payload to a file, e.g. /tmp/ann.raw (write the raw string exactly as
-   returned).
-3. Clone or pull the repo (git, main branch). Run:
-   python3 scripts/publish_announcements.py --raw /tmp/ann.raw --out . \
-     --message-id <gmail message id> --subject "<subject>" --sent-at "<message date ISO>"
-   If RAW is unavailable, fall back to PLAIN_TEXT: save the body to /tmp/ann.txt and run
-   --text /tmp/ann.txt instead.
-4. Sanity-check announcements.json: the text should start with "All," (or similar) and must not
-   contain the "You received this email because…" footer. Fix by hand only if the script missed
-   something obvious.
-5. git add announcements.json img && git commit -m "Announcements for <date>" && git push.
-6. Gmail: apply the label "NPYSA/Announcements" to the message (create it if missing) and remove
-   it from the inbox (archive). Do not delete it.
-7. Report in one paragraph: the date published, number of images, and anything odd.
-```
+Runs in Joseph's Google account, not in Claude: `scripts/announcements.gs`. It reads the
+"Northpoint YSA Ward Weekly Announcements" email (attachments included, Trash included), writes
+`announcements.json` + `img/ann-*` to the repo through the GitHub API, then labels and archives
+the email. Setup steps are at the top of that file. Re-running it is safe (it skips an email it
+already published). If it ever breaks, `scripts/publish_announcements.py` does the same job
+from a raw `.eml`.
 
 ## 2. Sync attendance with LCR (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
 

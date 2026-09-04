@@ -39,7 +39,15 @@
       </a>
     </nav>
 
-    <nav class="links" id="links" aria-label="Community links" hidden></nav>
+    <section aria-labelledby="connect-title" id="connect" hidden>
+      <div class="section-title">
+        <h2 id="connect-title">Connect with us</h2>
+      </div>
+      <div class="card connect">
+        <p class="connect-sub">Ward chatter, rides, last-minute plans — join the group and the chat.</p>
+        <nav class="links" id="links" aria-label="Community links"></nav>
+      </div>
+    </section>
 
     <section aria-labelledby="ann-title">
       <div class="section-title">
@@ -74,7 +82,7 @@
         if (!L[k]) continue;
         links.appendChild(el('a', { class: 'link ' + k, href: L[k], target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: icon }), label]));
       }
-      links.hidden = !links.children.length;
+      document.getElementById('connect').hidden = !links.children.length;
 
       document.getElementById('today').textContent = new Date().toLocaleDateString('en-US', { timeZone: NP.C.timeZone, weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -93,10 +101,27 @@
             meta.textContent = 'Posted ' + d.toLocaleDateString('en-US', { timeZone: NP.C.timeZone, month: 'short', day: 'numeric' });
           }
           if (a.text) box.appendChild(el('div', { class: 'announcement-body', html: linkify(a.text) }));
+          // long announcements start collapsed
+          requestAnimationFrame(() => {
+            if (box.scrollHeight > 720) {
+              box.classList.add('collapsed');
+              const more = el('button', { class: 'btn secondary more', onclick: () => { box.classList.remove('collapsed'); more.remove(); } }, 'Show all announcements');
+              box.after(more);
+            }
+          });
           if (a.images && a.images.length) {
             const g = el('div', { class: 'announcement-images' });
-            for (const src of a.images) g.appendChild(el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: 'Announcement flyer', loading: 'lazy' })));
+            for (const im of a.images) {
+              const src = typeof im === 'string' ? im : im.path;
+              const label = typeof im === 'string' ? 'Announcement flyer' : (im.name || 'Announcement flyer');
+              g.appendChild(el('a', { href: src, target: '_blank', rel: 'noopener' }, el('img', { src, alt: label, loading: 'lazy' })));
+            }
             box.appendChild(g);
+          }
+          if (a.files && a.files.length) {
+            const f = el('div', { class: 'announcement-files' });
+            for (const file of a.files) f.appendChild(el('a', { class: 'file', href: file.path, target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: icons.file }), file.name || file.path.split('/').pop()]));
+            box.appendChild(f);
           }
         })
         .catch(() => { box.innerHTML = ''; box.appendChild(el('p', { class: 'empty' }, 'No announcements posted yet.')); });

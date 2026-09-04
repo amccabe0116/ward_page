@@ -99,7 +99,7 @@
       const { C, rpc, el, toast, fmtDate } = NP;
       const $ = id => document.getElementById(id);
       let pass = sessionStorage.getItem('np_admin_pass') || '';
-      let members = [], dates = [], current = null, att = [];
+      let members = [], dates = [], current = null, att = [], guests = [];
 
       function classLabel(c) { return C.classes[c] ? C.classes[c].short : c; }
 
@@ -141,19 +141,20 @@
       }
 
       async function loadAttendance() {
-        att = await rpc('admin_attendance', { p_pass: pass, p_date: current });
+        [att, guests] = await Promise.all([rpc('admin_attendance', { p_pass: pass, p_date: current }), rpc('admin_guests', { p_pass: pass, p_date: current }).catch(() => [])]);
         const box = $('att'); box.innerHTML = '';
         const stats = $('stats'); stats.innerHTML = '';
         for (const c of Object.keys(C.classes)) {
           const rows = att.filter(a => a.class === c);
-          stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.length)), el('span', {}, classLabel(c))]));
+          const grows = guests.filter(g => g.class === c);
+          stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.length + grows.length)), el('span', {}, classLabel(c) + (grows.length ? ` (${grows.length} guest${grows.length === 1 ? '' : 's'})` : ''))]));
           if (c === 'priesthood_rs') {
             stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.filter(r => r.org === 'EQ').length)), el('span', {}, 'Elders Quorum')]));
             stats.appendChild(el('div', { class: 'stat' }, [el('b', {}, String(rows.filter(r => r.org === 'RS').length)), el('span', {}, 'Relief Society')]));
           }
           const synced = rows.filter(r => r.synced_to_lcr_at).length;
           box.appendChild(el('div', { class: 'section-title' }, [el('h2', {}, classLabel(c)), el('span', { class: 'meta' }, rows.length ? `${synced}/${rows.length} in LCR` : '')]));
-          if (!rows.length) { box.appendChild(el('p', { class: 'empty' }, 'Nobody checked in.')); continue; }
+          if (!rows.length && !grows.length) { box.appendChild(el('p', { class: 'empty' }, 'Nobody checked in.')); continue; }
           const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Checked in'), el('th', {}, 'LCR'), el('th', {}, '')])));
           const tb = el('tbody');
           for (const r of rows) {
@@ -163,6 +164,15 @@
               el('td', { class: 'muted' }, new Date(r.created_at).toLocaleTimeString('en-US', { timeZone: C.timeZone, hour: 'numeric', minute: '2-digit' })),
               el('td', {}, el('span', { class: 'pill ' + (r.synced_to_lcr_at ? 'ok' : 'off') }, r.synced_to_lcr_at ? 'synced' : 'pending')),
               el('td', {}, el('button', { class: 'chip', onclick: async () => { if (!confirm(`Remove ${r.display_name} from ${classLabel(c)}?`)) return; await rpc('admin_set_attendance', { p_pass: pass, p_date: current, p_class: c, p_member_id: r.member_id, p_present: false }); loadAttendance(); } }, 'Remove')),
+            ]));
+          }
+          for (const g of grows) {
+            tb.appendChild(el('tr', {}, [
+              el('td', {}, [g.name + ' ', el('span', { class: 'pill' }, 'guest')]),
+              el('td', {}, '—'),
+              el('td', { class: 'muted' }, new Date(g.created_at).toLocaleTimeString('en-US', { timeZone: C.timeZone, hour: 'numeric', minute: '2-digit' })),
+              el('td', {}, el('span', { class: 'pill ' + (g.synced_to_lcr_at ? 'ok' : 'off') }, g.synced_to_lcr_at ? 'in LCR' : 'add as visitor')),
+              el('td', {}, el('button', { class: 'chip', onclick: async () => { if (!confirm(`Remove guest ${g.name}?`)) return; await rpc('admin_remove_guest', { p_pass: pass, p_guest_id: g.guest_id }); loadAttendance(); } }, 'Remove')),
             ]));
           }
           t.appendChild(tb); box.appendChild(t);
@@ -184,6 +194,8 @@
           if (c === 'priesthood_rs') {
             for (const o of ['EQ', 'RS']) { const rr = rows.filter(r => r.org === o); lines.push(`  ${o === 'EQ' ? 'Elders Quorum' : 'Relief Society'} (${rr.length}): ${rr.map(r => r.name).join('; ')}`); }
           } else lines.push('  ' + rows.map(r => r.name).join('; '));
+          const gg = guests.filter(g => g.class === c);
+          if (gg.length) lines.push(`  Guests / visitors (${gg.length}): ${gg.map(g => g.name).join('; ')}`);
         }
         try { await navigator.clipboard.writeText(lines.join('\n')); toast('Summary copied'); } catch (e) { prompt('Copy:', lines.join('\n')); }
       });

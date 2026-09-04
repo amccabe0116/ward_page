@@ -28,6 +28,13 @@
     <div id="status"></div>
     <ul class="list" id="list"></ul>
     <p class="count" id="count"></p>
+    <div class="guest" id="guest">
+      <div class="field">
+        <input id="guest-name" type="text" placeholder="Visiting? Type your full name" autocomplete="name" autocapitalize="words" aria-label="Guest name" maxlength="60">
+        <button class="btn small" id="guest-btn" type="button">Check in</button>
+      </div>
+      <p class="hint">Not on the list? Add yourself as a guest — no need to be a member of the ward.</p>
+    </div>
     <div class="actionbar" id="actionbar" hidden>
       <button class="btn" id="submit" disabled>Check in</button>
     </div>
@@ -58,11 +65,12 @@
       const actionbar = document.getElementById('actionbar');
       const submitBtn = document.getElementById('submit');
 
-      let members = [], done = new Set(), selected = new Set(), orgFilter = 'ALL';
+      let members = [], done = new Set(), selected = new Set(), orgFilter = 'ALL', guests = [];
+      const guestEl = document.getElementById('guest'), guestName = document.getElementById('guest-name'), guestBtn = document.getElementById('guest-btn');
 
       try {
-        const [m, d] = await Promise.all([rpc('roll_members'), rpc('checked_in', { p_date: meetingDate, p_class: cls })]);
-        members = m || []; done = new Set(d || []);
+        const [m, d, g] = await Promise.all([rpc('roll_members'), rpc('checked_in', { p_date: meetingDate, p_class: cls }), rpc('guests_checked_in', { p_date: meetingDate, p_class: cls }).catch(() => [])]);
+        members = m || []; done = new Set(d || []); guests = g || [];
       } catch (e) {
         statusEl.innerHTML = '';
         statusEl.appendChild(el('div', { class: 'notice error' }, 'Could not load the roll (' + e.message + '). Check your connection and try again.'));
@@ -100,7 +108,22 @@
           row.classList.toggle('hide', !match);
           if (match) shown++;
         }
-        countEl.textContent = shown === members.length ? `${members.length} names · ${done.size} checked in` : `${shown} of ${members.length} names`;
+        // guests already checked in show at the end of the list
+        for (const gname of guests) {
+          const key = 'guest:' + gname.toLowerCase();
+          let row = rows.get(key);
+          if (!row) {
+            row = el('li', { class: 'row done guest-row', 'data-id': key }, [el('span', { class: 'box', html: icons.check }), el('span', { class: 'name' }, gname), el('span', { class: 'tag' }, 'Guest · checked in')]);
+            rows.set(key, row); listEl.appendChild(row);
+          }
+          const match = (!q || gname.toLowerCase().includes(q)) && orgFilter === 'ALL';
+          row.classList.toggle('hide', !match);
+          if (match) shown++;
+        }
+        const total = members.length + guests.length, checked = done.size + guests.length;
+        countEl.textContent = shown === total ? `${total} names · ${checked} checked in` : `${shown} of ${total} names`;
+        if (q && shown === 0 && !guestName.value) guestName.value = searchEl.value.trim();
+        guestEl.hidden = selected.size > 0;
         const n = selected.size;
         actionbar.hidden = n === 0;
         submitBtn.disabled = n === 0;
@@ -111,7 +134,16 @@
       function renderQuick() {
         quickEl.innerHTML = '';
         const me = store.get('np_me');
-        if (!me || !members.some(m => m.id === me.id) || done.has(me.id) || selected.size) return;
+        if (!me || selected.size) return;
+        if (me.guest) {
+          if (guests.some(g => g.toLowerCase() === me.name.toLowerCase())) return;
+          quickEl.appendChild(el('div', { class: 'quick' }, [
+            el('span', { class: 'txt', html: 'Welcome back, <b>' + NP.escapeHtml(me.name.split(' ')[0]) + '</b>' }),
+            el('button', { class: 'btn small', onclick: () => submitGuest(me.name) }, 'Check in'),
+          ]));
+          return;
+        }
+        if (!members.some(m => m.id === me.id) || done.has(me.id)) return;
         quickEl.appendChild(el('div', { class: 'quick' }, [
           el('span', { class: 'txt', html: 'Welcome back, <b>' + NP.escapeHtml(me.name.split(' ')[0]) + '</b>' }),
           el('button', { class: 'btn small', onclick: () => submit([me.id]) }, 'Check in'),
@@ -144,6 +176,23 @@
           render();
         }
       }
+
+      async function submitGuest(name) {
+        name = (name || '').trim();
+        if (name.split(/\s+/).length < 2) { toast('Please enter your first and last name'); guestName.focus(); return; }
+        guestBtn.disabled = true; guestBtn.textContent = 'Checking in…';
+        try {
+          const saved = await rpc('check_in_guest', { p_date: meetingDate, p_class: cls, p_name: name });
+          if (!guests.some(g => g.toLowerCase() === saved.toLowerCase())) guests.push(saved);
+          store.set('np_me', { guest: true, name: saved });
+          guestName.value = '';
+          showSuccess([saved + ' (guest)']);
+        } catch (e) {
+          toast(e.message.replace(/^.*?:\s*/, ''), 4000);
+        } finally { guestBtn.disabled = false; guestBtn.textContent = 'Check in'; }
+      }
+      guestBtn.addEventListener('click', () => submitGuest(guestName.value));
+      guestName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitGuest(guestName.value); } });
 
       function showSuccess(names) {
         const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;

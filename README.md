@@ -11,7 +11,9 @@ announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
 supabase/schema.sql database (tables, RLS, RPC functions) — paste into the SQL editor once
 scripts/lcr-sync.js runs inside a signed-in LCR tab: roster → Supabase, check-ins → LCR
-scripts/publish_announcements.py  email (RAW MIME) → announcements.json + img/
+scripts/announcements.gs          Google Apps Script: announcements email → repo, every Sunday night
+scripts/publish_announcements.py  same thing from a raw .eml, for manual use
+supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
 ```
 
 ## How it fits together
@@ -19,9 +21,9 @@ scripts/publish_announcements.py  email (RAW MIME) → announcements.json + img/
 1. **QR code → northpointysa.com.** People pick Sunday School or Priesthood / Relief Society,
    find their name, tap Check in. Check-ins go to Supabase through `check_in()`; the anon key
    can only call the roll functions (see the grants in `schema.sql`).
-2. **Sunday night — announcements.** A scheduled Claude task reads the
-   "Northpoint YSA Ward Weekly Announcements" email (sent from LCR), runs
-   `publish_announcements.py`, commits `announcements.json` + `img/`, and archives the email
+2. **Sunday night — announcements.** A Google Apps Script in Joseph's account
+   (`scripts/announcements.gs`) reads the "Northpoint YSA Ward Weekly Announcements" email
+   (sent from LCR), commits `announcements.json` + the flyers to `img/`, and archives the email
    under the `NPYSA/Announcements` label. GitHub Pages redeploys in about a minute.
 3. **Sunday night — LCR.** A second task (bound to Joseph's Mac) opens LCR's Class and Quorum
    Attendance report in Claude's browser pane and runs `lcr-sync.js`, which refreshes the roster
