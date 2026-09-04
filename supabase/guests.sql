@@ -21,6 +21,9 @@ language plpgsql security definer set search_path = public, extensions as $$
 declare v_name text;
 begin
   if p_class not in ('sunday_school','priesthood_rs') then raise exception 'bad class'; end if;
+  if to_regproc('public._window_open(text)') is not null then
+    if not _window_open(p_class) then raise exception 'Check-in is closed right now' using errcode = 'P0001'; end if;
+  end if;
   if p_date > (now() at time zone 'America/New_York')::date + 1
      or p_date < (now() at time zone 'America/New_York')::date - 8 then
     raise exception 'date out of range';
