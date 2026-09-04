@@ -14,6 +14,6 @@ window.NP_CONFIG = {
   // Community links shown on the home page (leave a value empty to hide it).
   links: {
     facebook: 'https://www.facebook.com/share/g/1EBje3B48V/',
-    whatsapp: '',
+    whatsapp: 'https://chat.whatsapp.com/HHJ3Wfl0GXxEe5MCjABduZ',
   },
 };
