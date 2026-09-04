@@ -2,7 +2,8 @@
 -- Paste this whole file into the Supabase SQL editor of the *northpointysa* project and run it once.
 -- Safe to re-run: everything is CREATE ... IF NOT EXISTS / CREATE OR REPLACE.
 
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -51,7 +52,7 @@ revoke all on public.members, public.attendance, public.settings from anon, auth
 -- Helpers
 -- ---------------------------------------------------------------------------
 create or replace function public._check_admin(p_pass text) returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare v_hash text;
 begin
   select value into v_hash from settings where key = 'admin_passphrase_hash';
@@ -76,7 +77,7 @@ $$;
 -- Active members for the roll. Only the fields the page needs.
 create or replace function public.roll_members()
 returns table (id uuid, display_name text, org text)
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select id, display_name, org
   from members
   where active
@@ -86,7 +87,7 @@ $$;
 -- Who is already checked in for a given meeting/class (ids only).
 create or replace function public.checked_in(p_date date, p_class text)
 returns setof uuid
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select member_id from attendance where meeting_date = p_date and class = p_class
 $$;
 
@@ -94,7 +95,7 @@ $$;
 -- (so a stale phone can't write to a random week). Duplicates are ignored.
 create or replace function public.check_in(p_date date, p_class text, p_member_ids uuid[])
 returns int
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare v_count int;
 begin
   if p_class not in ('sunday_school','priesthood_rs') then
@@ -116,7 +117,7 @@ end $$;
 -- Undo a check-in (someone tapped the wrong name).
 create or replace function public.check_out(p_date date, p_class text, p_member_id uuid)
 returns int
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare v_count int;
 begin
   delete from attendance
@@ -140,7 +141,7 @@ grant execute on function public.current_meeting_date()            to anon;
 --   select set_admin_passphrase('CHOOSE-A-PASSPHRASE');
 -- (Only callable from the SQL editor / service role — not granted to anon.)
 create or replace function public.set_admin_passphrase(p_pass text) returns void
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   insert into settings (key, value)
   values ('admin_passphrase_hash', crypt(p_pass, gen_salt('bf')))
   on conflict (key) do update set value = excluded.value
@@ -153,7 +154,7 @@ returns table (
   attendance_id bigint, class text, member_id uuid, display_name text, name text,
   org text, lcr_uuid uuid, lcr_classes jsonb, created_at timestamptz, synced_to_lcr_at timestamptz
 )
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _check_admin(p_pass);
   return query
@@ -167,7 +168,7 @@ end $$;
 -- Sundays that have any attendance, newest first (for the admin date picker).
 create or replace function public.admin_meeting_dates(p_pass text)
 returns table (meeting_date date, sunday_school int, priesthood_rs int)
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _check_admin(p_pass);
   return query
@@ -183,7 +184,7 @@ end $$;
 -- Full member list for the admin page.
 create or replace function public.admin_members(p_pass text)
 returns setof public.members
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _check_admin(p_pass);
   return query select * from members order by active desc, lower(name);
@@ -197,7 +198,7 @@ end $$;
 -- If p_deactivate_missing is true, members not in the list are marked inactive.
 create or replace function public.admin_upsert_members(p_pass text, p_members jsonb, p_deactivate_missing boolean default true)
 returns table (inserted int, updated int, deactivated int)
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare v_ins int := 0; v_upd int := 0; v_deact int := 0; r record;
 begin
   perform _check_admin(p_pass);
@@ -244,7 +245,7 @@ end $$;
 -- Mark attendance rows as pushed to LCR.
 create or replace function public.admin_mark_synced(p_pass text, p_attendance_ids bigint[])
 returns int
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare v int;
 begin
   perform _check_admin(p_pass);
@@ -256,7 +257,7 @@ end $$;
 -- Manually toggle a member active/inactive (moved out, etc.).
 create or replace function public.admin_set_member_active(p_pass text, p_member_id uuid, p_active boolean)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _check_admin(p_pass);
   update members set active = p_active, updated_at = now() where id = p_member_id;
@@ -265,7 +266,7 @@ end $$;
 -- Admin-side check-in/out (fixing the roll after the fact, any date).
 create or replace function public.admin_set_attendance(p_pass text, p_date date, p_class text, p_member_id uuid, p_present boolean)
 returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _check_admin(p_pass);
   if p_present then
