@@ -81,6 +81,12 @@ button { font-family: inherit; }
 .choice .label { display: block; font-weight: 600; font-size: 19px; line-height: 1.2; }
 .choice .sub { display: block; color: var(--muted); font-size: 14px; margin-top: 3px; }
 .choice .chev { margin-left: auto; color: var(--muted); }
+.choice.closed { background: #f1efe9; border-color: #e6e2d8; box-shadow: none; color: var(--muted); cursor: not-allowed; }
+.choice.closed .icon { background: #e8e4da; color: #9aa0a8; }
+.choice.closed .label { color: #6b7280; }
+.choice.closed .sub { color: #8a8f98; }
+.choice.closed .chev { visibility: hidden; }
+.choice.closed:active { transform: none; }
 
 /* Community links */
 .connect-sub { margin: 0 0 12px; color: var(--muted); font-size: 15px; }

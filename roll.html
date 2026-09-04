@@ -24,6 +24,7 @@
       <input class="search" id="search" type="search" placeholder="Find your name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Find your name">
       <div class="chips" id="chips" hidden></div>
     </div>
+    <div class="notice" id="closed" hidden></div>
     <div id="quick"></div>
     <div id="status"></div>
     <ul class="list" id="list"></ul>
@@ -65,7 +66,17 @@
       const actionbar = document.getElementById('actionbar');
       const submitBtn = document.getElementById('submit');
 
-      let members = [], done = new Set(), selected = new Set(), orgFilter = 'ALL', guests = [];
+      let members = [], done = new Set(), selected = new Set(), orgFilter = 'ALL', guests = [], windowOpen = true;
+      const closedEl = document.getElementById('closed');
+      function paintWindow() {
+        const st = NP.windowState(cls);
+        windowOpen = st.open;
+        closedEl.hidden = st.open;
+        closedEl.textContent = st.open ? '' : `Check-in for ${info.short} is closed. ${st.label}.`;
+        document.getElementById('guest').hidden = !st.open || selected.size > 0;
+        submitBtn.disabled = !st.open || selected.size === 0;
+      }
+      NP.loadWindows().then(() => NP.everyTick(paintWindow));
       const guestEl = document.getElementById('guest'), guestName = document.getElementById('guest-name'), guestBtn = document.getElementById('guest-btn');
 
       try {
@@ -123,10 +134,10 @@
         const total = members.length + guests.length, checked = done.size + guests.length;
         countEl.textContent = shown === total ? `${total} names · ${checked} checked in` : `${shown} of ${total} names`;
         if (q && shown === 0 && !guestName.value) guestName.value = searchEl.value.trim();
-        guestEl.hidden = selected.size > 0;
+        guestEl.hidden = selected.size > 0 || !windowOpen;
         const n = selected.size;
         actionbar.hidden = n === 0;
-        submitBtn.disabled = n === 0;
+        submitBtn.disabled = n === 0 || !windowOpen;
         submitBtn.textContent = n === 1 ? `Check in ${members.find(m => selected.has(m.id)).display_name}` : `Check in ${n} people`;
         renderQuick();
       }
@@ -134,7 +145,7 @@
       function renderQuick() {
         quickEl.innerHTML = '';
         const me = store.get('np_me');
-        if (!me || selected.size) return;
+        if (!me || selected.size || !windowOpen) return;
         if (me.guest) {
           if (guests.some(g => g.toLowerCase() === me.name.toLowerCase())) return;
           quickEl.appendChild(el('div', { class: 'quick' }, [
@@ -151,6 +162,7 @@
       }
 
       function tap(m) {
+        if (!windowOpen && !done.has(m.id)) { toast(closedEl.textContent); return; }
         if (done.has(m.id)) {
           if (confirm(`Undo check-in for ${m.display_name}?`)) {
             rpc('check_out', { p_date: meetingDate, p_class: cls, p_member_id: m.id })

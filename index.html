@@ -21,19 +21,19 @@
 
   <main class="wrap">
     <nav class="choices" aria-label="Take roll">
-      <a class="choice" href="roll.html?class=sunday_school">
+      <a class="choice" href="roll.html?class=sunday_school" data-class="sunday_school">
         <span class="icon" id="icon-ss"></span>
         <span class="text">
           <span class="label">Sunday School</span>
-          <span class="sub">Check in for class</span>
+          <span class="sub" data-sub="Check in for class">Check in for class</span>
         </span>
         <span class="chev" id="chev-ss"></span>
       </a>
-      <a class="choice" href="roll.html?class=priesthood_rs">
+      <a class="choice" href="roll.html?class=priesthood_rs" data-class="priesthood_rs">
         <span class="icon" id="icon-prs"></span>
         <span class="text">
           <span class="label">Priesthood / Relief Society</span>
-          <span class="sub">Elders Quorum &amp; Relief Society</span>
+          <span class="sub" data-sub="Elders Quorum &amp; Relief Society">Elders Quorum &amp; Relief Society</span>
         </span>
         <span class="chev" id="chev-prs"></span>
       </a>
@@ -85,6 +85,21 @@
       document.getElementById('connect').hidden = !links.children.length;
 
       document.getElementById('today').textContent = new Date().toLocaleDateString('en-US', { timeZone: NP.C.timeZone, weekday: 'long', month: 'long', day: 'numeric' });
+
+      // grey the class buttons outside their check-in windows; flips live, no reload needed
+      const choiceEls = [...document.querySelectorAll('.choice[data-class]')];
+      function paintChoices() {
+        for (const a of choiceEls) {
+          const st = NP.windowState(a.dataset.class), sub = a.querySelector('.sub');
+          a.classList.toggle('closed', !st.open);
+          a.setAttribute('aria-disabled', st.open ? 'false' : 'true');
+          a.tabIndex = st.open ? 0 : -1;
+          sub.textContent = st.open ? sub.dataset.sub : st.label;
+        }
+      }
+      choiceEls.forEach(a => a.addEventListener('click', e => { if (a.classList.contains('closed')) { e.preventDefault(); NP.toast(a.querySelector('.sub').textContent); } }));
+      NP.loadWindows().then(() => NP.everyTick(paintChoices));
+      paintChoices();
 
       const box = document.getElementById('announcements');
       const meta = document.getElementById('ann-meta');

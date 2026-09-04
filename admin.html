@@ -38,6 +38,7 @@
         <button class="tab on" data-pane="attendance">Attendance</button>
         <button class="tab" data-pane="members">Members</button>
         <button class="tab" data-pane="sync">LCR sync</button>
+        <button class="tab" data-pane="settings">Settings</button>
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
       </div>
 
@@ -87,6 +88,28 @@
             <li>Rows below turn <span class="pill ok">synced</span> once LCR has them.</li>
           </ol>
           <p class="muted">Only weeks LCR still allows editing can be pushed (LCR opens each week through the coming Sunday).</p>
+        </div>
+      </section>
+      <!-- Settings -->
+      <section class="pane" id="pane-settings">
+        <div class="card">
+          <h3 style="margin-top:0">Check-in windows</h3>
+          <p class="muted">Times are Eastern. Outside the window the button on the home page greys out and says when it opens; check-ins are refused by the database too.</p>
+          <div class="inline">
+            <div class="field" style="margin:0"><label for="w-ss-start">Sunday School opens</label><input id="w-ss-start" type="time"></div>
+            <div class="field" style="margin:0"><label for="w-ss-end">closes</label><input id="w-ss-end" type="time"></div>
+          </div>
+          <div class="inline" style="margin-top:8px">
+            <div class="field" style="margin:0"><label for="w-prs-start">Priesthood / RS opens</label><input id="w-prs-start" type="time"></div>
+            <div class="field" style="margin:0"><label for="w-prs-end">closes</label><input id="w-prs-end" type="time"></div>
+          </div>
+          <div class="inline" style="margin-top:8px">
+            <div class="field" style="margin:0"><label for="w-day">Day</label>
+              <select id="w-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+            </div>
+            <label class="inline" style="gap:6px;align-self:flex-end;padding-bottom:10px"><input id="w-enforce" type="checkbox"> Enforce windows (untick to allow check-in any time, e.g. for testing)</label>
+          </div>
+          <div class="inline" style="margin-top:12px"><button class="btn small" id="w-save">Save</button><span class="muted" id="w-msg"></span></div>
         </div>
       </section>
     </div>
@@ -226,6 +249,28 @@
         t.appendChild(tb); box.appendChild(t);
       }
       $('members-search').addEventListener('input', renderMembers);
+
+      // ---- settings ----
+      async function loadSettings() {
+        let rows = [];
+        try { rows = await rpc('admin_get_settings', { p_pass: pass }); } catch (e) { $('w-msg').textContent = 'Run supabase/windows.sql first.'; return; }
+        const get = k => (rows.find(r => r.key === k) || {}).value;
+        const split = v => (v || '-').split('-');
+        [$('w-ss-start').value, $('w-ss-end').value] = split(get('window_sunday_school') || '12:50-14:30');
+        [$('w-prs-start').value, $('w-prs-end').value] = split(get('window_priesthood_rs') || '13:20-14:30');
+        $('w-day').value = get('window_day') || '0';
+        $('w-enforce').checked = (get('roll_enforce_window') || 'true') === 'true';
+      }
+      $('w-save').addEventListener('click', async () => {
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'window_sunday_school', p_value: $('w-ss-start').value + '-' + $('w-ss-end').value });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'window_priesthood_rs', p_value: $('w-prs-start').value + '-' + $('w-prs-end').value });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'window_day', p_value: $('w-day').value });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'roll_enforce_window', p_value: $('w-enforce').checked ? 'true' : 'false' });
+          $('w-msg').textContent = 'Saved — the site picks it up within 15 seconds.';
+        } catch (e) { $('w-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      document.querySelector('.tab[data-pane=settings]').addEventListener('click', loadSettings);
       $('import-btn').addEventListener('click', async () => {
         let data;
         try { data = JSON.parse($('import-json').value); if (!Array.isArray(data)) throw new Error('not an array'); } catch (e) { $('import-msg').textContent = 'Invalid JSON: ' + e.message; return; }

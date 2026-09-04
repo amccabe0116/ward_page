@@ -78,6 +78,45 @@
     return h;
   }
 
+  // ---- check-in windows (America/New_York) ----
+  const DEFAULT_WINDOWS = [
+    { class: 'sunday_school', start_time: '12:50', end_time: '14:30', day_of_week: 0, enforced: true },
+    { class: 'priesthood_rs', start_time: '13:20', end_time: '14:30', day_of_week: 0, enforced: true },
+  ];
+  let windows = DEFAULT_WINDOWS;
+  async function loadWindows() {
+    try { const w = await rpc('roll_windows'); if (Array.isArray(w) && w.length) windows = w; } catch (e) {}
+    return windows;
+  }
+  function tzNowParts() {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: C.timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+    const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]));
+    return { dow: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(p.weekday), minutes: (+p.hour % 24) * 60 + (+p.minute) };
+  }
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const fmtTime = t => { const [h, m] = t.split(':').map(Number); const hh = ((h + 11) % 12) + 1; return `${hh}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`; };
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  // Returns { open, label } for a class right now. label describes when it opens (or that it closed).
+  function windowState(cls) {
+    const w = windows.find(x => x.class === cls);
+    if (!w || w.enforced === false) return { open: true, label: '' };
+    const now = tzNowParts(), start = toMin(w.start_time), end = toMin(w.end_time);
+    const day = DAYS[w.day_of_week] || 'Sunday';
+    if (now.dow === w.day_of_week) {
+      if (now.minutes < start) return { open: false, label: `Opens today at ${fmtTime(w.start_time)}` };
+      if (now.minutes < end) return { open: true, label: `Open until ${fmtTime(w.end_time)}` };
+      return { open: false, label: `Closed for today · opens ${day} at ${fmtTime(w.start_time)}` };
+    }
+    return { open: false, label: `Opens ${day} at ${fmtTime(w.start_time)}` };
+  }
+  // Re-run fn now and every 15 s (and when the tab comes back), so buttons flip without a reload.
+  function everyTick(fn) {
+    fn();
+    const id = setInterval(fn, 15000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) fn(); });
+    return id;
+  }
+
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
@@ -94,5 +133,5 @@
     whatsapp: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 1.8a8.2 8.2 0 1 1-4.2 15.3l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 0 1 12 3.8zm-3.3 4.4c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.4s1 2.8 1.2 3c.1.2 2 3.2 5 4.4 2.5 1 3 .8 3.5.7.5-.1 1.7-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.3l-2-1c-.3-.1-.5-.2-.7.2l-.9 1.1c-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.5-.5.3-.5c.1-.2 0-.4 0-.5L9.5 8.6c-.2-.5-.4-.4-.6-.4h-.2z"/></svg>',
   };
 
-  window.NP = { C, rpc, currentMeetingDate, fmtDate, el, toast, escapeHtml, linkify, store, icons };
+  window.NP = { C, rpc, currentMeetingDate, fmtDate, el, toast, escapeHtml, linkify, store, icons, loadWindows, windowState, everyTick, fmtTime };
 })();
