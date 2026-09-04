@@ -39,6 +39,8 @@
       </a>
     </nav>
 
+    <nav class="links" id="links" aria-label="Community links" hidden></nav>
+
     <section aria-labelledby="ann-title">
       <div class="section-title">
         <h2 id="ann-title">Announcements</h2>
@@ -61,6 +63,18 @@
       document.getElementById('icon-prs').innerHTML = icons.people;
       document.getElementById('chev-ss').innerHTML = icons.chevron;
       document.getElementById('chev-prs').innerHTML = icons.chevron;
+
+      const links = document.getElementById('links');
+      const L = NP.C.links || {};
+      const defs = [
+        ['facebook', 'Facebook group', icons.facebook],
+        ['whatsapp', 'WhatsApp chat', icons.whatsapp],
+      ];
+      for (const [k, label, icon] of defs) {
+        if (!L[k]) continue;
+        links.appendChild(el('a', { class: 'link ' + k, href: L[k], target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: icon }), label]));
+      }
+      links.hidden = !links.children.length;
 
       document.getElementById('today').textContent = new Date().toLocaleDateString('en-US', { timeZone: NP.C.timeZone, weekday: 'long', month: 'long', day: 'numeric' });
 

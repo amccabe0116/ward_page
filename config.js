@@ -11,4 +11,9 @@ window.NP_CONFIG = {
     priesthood_rs: { label: 'Priesthood / Relief Society', short: 'Priesthood / RS', orgTypeIds: [70, 71, 74] },
   },
   timeZone: 'America/New_York',
+  // Community links shown on the home page (leave a value empty to hide it).
+  links: {
+    facebook: 'https://www.facebook.com/share/g/1EBje3B48V/',
+    whatsapp: '',
+  },
 };
