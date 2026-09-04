@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Roll · North Point YSA</title>
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">Roll</p>
+    <h1 id="title">…</h1>
+    <p class="date" id="date"></p>
+  </header>
+
+  <main class="wrap" id="main">
+    <div class="toolbar">
+      <input class="search" id="search" type="search" placeholder="Find your name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Find your name">
+      <div class="chips" id="chips" hidden></div>
+    </div>
+    <div id="quick"></div>
+    <div id="status"></div>
+    <ul class="list" id="list"></ul>
+    <p class="count" id="count"></p>
+    <div class="actionbar" id="actionbar" hidden>
+      <button class="btn" id="submit" disabled>Check in</button>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (async function () {
+      const { C, rpc, el, toast, fmtDate, store, icons } = NP;
+      const params = new URLSearchParams(location.search);
+      const cls = params.get('class');
+      const info = C.classes[cls];
+      const main = document.getElementById('main');
+      if (!info) { location.replace('index.html'); return; }
+
+      const meetingDate = params.get('date') || NP.currentMeetingDate();
+      document.getElementById('title').textContent = info.label;
+      document.getElementById('date').textContent = fmtDate(meetingDate);
+      document.title = info.short + ' · North Point YSA';
+
+      const listEl = document.getElementById('list');
+      const countEl = document.getElementById('count');
+      const statusEl = document.getElementById('status');
+      const quickEl = document.getElementById('quick');
+      const chipsEl = document.getElementById('chips');
+      const searchEl = document.getElementById('search');
+      const actionbar = document.getElementById('actionbar');
+      const submitBtn = document.getElementById('submit');
+
+      let members = [], done = new Set(), selected = new Set(), orgFilter = 'ALL';
+
+      try {
+        const [m, d] = await Promise.all([rpc('roll_members'), rpc('checked_in', { p_date: meetingDate, p_class: cls })]);
+        members = m || []; done = new Set(d || []);
+      } catch (e) {
+        statusEl.innerHTML = '';
+        statusEl.appendChild(el('div', { class: 'notice error' }, 'Could not load the roll (' + e.message + '). Check your connection and try again.'));
+        return;
+      }
+
+      if (cls === 'priesthood_rs') {
+        chipsEl.hidden = false;
+        for (const [k, label] of [['ALL', 'Everyone'], ['EQ', 'Elders Quorum'], ['RS', 'Relief Society']]) {
+          chipsEl.appendChild(el('button', { class: 'chip' + (k === orgFilter ? ' on' : ''), 'data-org': k, onclick: () => { orgFilter = k; [...chipsEl.children].forEach(c => c.classList.toggle('on', c.dataset.org === k)); render(); } }, label));
+        }
+      }
+
+      const orgLabel = { EQ: 'EQ', RS: 'RS' };
+      const rows = new Map();
+
+      function render() {
+        const q = searchEl.value.trim().toLowerCase();
+        let shown = 0;
+        for (const m of members) {
+          let row = rows.get(m.id);
+          if (!row) {
+            row = el('li', { class: 'row', role: 'button', tabindex: 0, 'data-id': m.id, onclick: () => tap(m), onkeydown: e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); tap(m); } } }, [
+              el('span', { class: 'box', html: icons.check }),
+              el('span', { class: 'name' }, m.display_name),
+              el('span', { class: 'tag' }, ''),
+            ]);
+            rows.set(m.id, row); listEl.appendChild(row);
+          }
+          const isDone = done.has(m.id), isSel = selected.has(m.id);
+          row.classList.toggle('done', isDone);
+          row.classList.toggle('sel', isSel && !isDone);
+          row.querySelector('.tag').textContent = isDone ? 'Checked in' : (cls === 'priesthood_rs' && m.org ? orgLabel[m.org] : '');
+          const match = (!q || m.display_name.toLowerCase().includes(q)) && (orgFilter === 'ALL' || m.org === orgFilter);
+          row.classList.toggle('hide', !match);
+          if (match) shown++;
+        }
+        countEl.textContent = shown === members.length ? `${members.length} names · ${done.size} checked in` : `${shown} of ${members.length} names`;
+        const n = selected.size;
+        actionbar.hidden = n === 0;
+        submitBtn.disabled = n === 0;
+        submitBtn.textContent = n === 1 ? `Check in ${members.find(m => selected.has(m.id)).display_name}` : `Check in ${n} people`;
+        renderQuick();
+      }
+
+      function renderQuick() {
+        quickEl.innerHTML = '';
+        const me = store.get('np_me');
+        if (!me || !members.some(m => m.id === me.id) || done.has(me.id) || selected.size) return;
+        quickEl.appendChild(el('div', { class: 'quick' }, [
+          el('span', { class: 'txt', html: 'Welcome back, <b>' + NP.escapeHtml(me.name.split(' ')[0]) + '</b>' }),
+          el('button', { class: 'btn small', onclick: () => submit([me.id]) }, 'Check in'),
+        ]));
+      }
+
+      function tap(m) {
+        if (done.has(m.id)) {
+          if (confirm(`Undo check-in for ${m.display_name}?`)) {
+            rpc('check_out', { p_date: meetingDate, p_class: cls, p_member_id: m.id })
+              .then(n => { if (n > 0) { done.delete(m.id); toast('Check-in removed'); } else { toast('That check-in can no longer be undone'); } render(); })
+              .catch(e => toast('Could not undo: ' + e.message));
+          }
+          return;
+        }
+        if (selected.has(m.id)) selected.delete(m.id); else selected.add(m.id);
+        render();
+      }
+
+      async function submit(ids) {
+        submitBtn.disabled = true; submitBtn.textContent = 'Checking in…';
+        try {
+          await rpc('check_in', { p_date: meetingDate, p_class: cls, p_member_ids: ids });
+          const names = members.filter(m => ids.includes(m.id)).map(m => m.display_name);
+          ids.forEach(id => done.add(id)); selected.clear();
+          if (ids.length === 1 && !store.get('np_me')) store.set('np_me', { id: ids[0], name: names[0] });
+          showSuccess(names);
+        } catch (e) {
+          toast('Check-in failed: ' + e.message, 4000);
+          render();
+        }
+      }
+
+      function showSuccess(names) {
+        const list = names.length <= 3 ? names.join(', ') : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+        const view = el('div', { class: 'success' }, [
+          el('div', { class: 'check', html: icons.check }),
+          el('h2', {}, names.length === 1 ? "You're checked in" : `${names.length} checked in`),
+          el('p', {}, `${list} · ${info.short} · ${fmtDate(meetingDate, { weekday: undefined })}`),
+          el('button', { class: 'btn secondary', onclick: () => { view.remove(); main.hidden = false; render(); } }, 'Check in someone else'),
+          el('a', { class: 'btn', href: 'index.html', style: 'text-decoration:none' }, 'Back to announcements'),
+        ]);
+        main.hidden = true;
+        document.body.appendChild(view);
+        window.scrollTo(0, 0);
+      }
+
+      submitBtn.addEventListener('click', () => submit([...selected]));
+      searchEl.addEventListener('input', render);
+      render();
+
+      // On a phone, put the cursor in the search box when nothing is pre-selected.
+      if (!store.get('np_me') && members.length > 30) setTimeout(() => searchEl.focus({ preventScroll: true }), 300);
+    })();
+  </script>
+</body>
+</html>
