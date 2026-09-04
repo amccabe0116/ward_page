@@ -111,7 +111,7 @@ function htmlToText_(h) {
   h = h.replace(/<\/(p|div|li|tr|h[1-6]|blockquote)>/gi, '\n');
   h = h.replace(/<li[^>]*>/gi, '• ');
   h = h.replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, function (m, href, inner) {
-    const label = inner.replace(/<[^>]+>/g, '').trim();
+    const label = inner.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
     href = href.replace(/&amp;/g, '&');
     if (/^mailto:/i.test(href)) return label;
     return label && href.indexOf(label) === -1 ? label + ' ' + href : href;
