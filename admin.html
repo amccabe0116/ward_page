@@ -31,11 +31,13 @@
       </div>
       <button class="btn" id="login-btn">Open</button>
       <p class="muted" id="login-msg"></p>
+      <p class="muted" style="font-size:12px">Signed in for 12 hours on this device. Ten wrong tries locks the page for 15 minutes.</p>
     </div>
 
     <div id="app" hidden>
       <div class="tabs">
         <button class="tab on" data-pane="attendance">Attendance</button>
+        <button class="tab" data-pane="notes">Housing &amp; Jobs<span class="badge" id="notes-badge" hidden></span></button>
         <button class="tab" data-pane="members">Members</button>
         <button class="tab" data-pane="sync">LCR sync</button>
         <button class="tab" data-pane="settings">Settings</button>
@@ -59,6 +61,15 @@
             <button class="btn small" id="add-btn" style="align-self:flex-end">Add</button>
           </div>
         </details>
+      </section>
+
+      <!-- Notes to leadership -->
+      <section class="pane" id="pane-notes">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">Private notes from the Housing and Jobs forms. Only people with this passphrase can see them.</span>
+          <label class="inline muted" style="gap:6px"><input id="notes-handled" type="checkbox"> Show handled</label>
+        </div>
+        <div id="notes" style="margin-top:12px"></div>
       </section>
 
       <!-- Members -->
@@ -121,27 +132,42 @@
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
       const $ = id => document.getElementById(id);
-      let pass = sessionStorage.getItem('np_admin_pass') || '';
-      let members = [], dates = [], current = null, att = [], guests = [];
+      // `pass` holds a 12-hour session token from admin_login (or, for older DBs, the passphrase).
+      let pass = localStorage.getItem('np_admin_token') || sessionStorage.getItem('np_admin_pass') || '';
+      let members = [], dates = [], current = null, att = [], guests = [], notes = [];
 
       function classLabel(c) { return C.classes[c] ? C.classes[c].short : c; }
 
       // ---- auth ----
-      async function tryLogin(p) {
+      async function openApp() {
+        $('login').hidden = true; $('app').hidden = false;
+        dates = await rpc('admin_meeting_dates', { p_pass: pass });
+        await loadMembers(); await buildDates(); await loadAttendance(); loadNotesCount();
+      }
+      async function loginWithPassphrase(p) {
+        $('login-msg').textContent = 'Checking…';
         try {
-          dates = await rpc('admin_meeting_dates', { p_pass: p });
-          pass = p; sessionStorage.setItem('np_admin_pass', p);
-          $('login').hidden = true; $('app').hidden = false;
-          await loadMembers(); await buildDates(); await loadAttendance();
+          const r = await rpc('admin_login', { p_pass: p, p_label: navigator.userAgent.slice(0, 60) });
+          if (!r || !r.ok) { $('login-msg').textContent = (r && r.error) || 'Wrong passphrase.'; return; }
+          pass = r.token; localStorage.setItem('np_admin_token', pass); sessionStorage.removeItem('np_admin_pass');
+          $('pass').value = ''; $('login-msg').textContent = '';
+          await openApp();
         } catch (e) {
-          $('login').hidden = false; $('app').hidden = true;
+          // older database without admin_login: fall back to using the passphrase directly
+          if (/admin_login/.test(e.message)) {
+            try { await rpc('admin_meeting_dates', { p_pass: p }); pass = p; sessionStorage.setItem('np_admin_pass', p); await openApp(); return; } catch (e2) { e = e2; }
+          }
           $('login-msg').textContent = e.status === 401 || /authoriz/i.test(e.message) ? 'Wrong passphrase.' : 'Error: ' + e.message;
         }
       }
-      $('login-btn').addEventListener('click', () => tryLogin($('pass').value));
-      $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin($('pass').value); });
-      $('logout').addEventListener('click', () => { sessionStorage.removeItem('np_admin_pass'); location.reload(); });
-      if (pass) tryLogin(pass); else $('login').hidden = false;
+      async function resumeSession() {
+        try { await openApp(); }
+        catch (e) { localStorage.removeItem('np_admin_token'); sessionStorage.removeItem('np_admin_pass'); pass = ''; $('login').hidden = false; $('app').hidden = true; if (!/authoriz/i.test(e.message)) $('login-msg').textContent = 'Error: ' + e.message; }
+      }
+      $('login-btn').addEventListener('click', () => loginWithPassphrase($('pass').value));
+      $('pass').addEventListener('keydown', e => { if (e.key === 'Enter') loginWithPassphrase($('pass').value); });
+      $('logout').addEventListener('click', async () => { try { await rpc('admin_logout', { p_token: pass }); } catch (e) {} localStorage.removeItem('np_admin_token'); sessionStorage.removeItem('np_admin_pass'); location.reload(); });
+      if (pass) resumeSession(); else $('login').hidden = false;
 
       // ---- tabs ----
       document.querySelectorAll('.tab[data-pane]').forEach(t => t.addEventListener('click', () => {
@@ -249,6 +275,37 @@
         t.appendChild(tb); box.appendChild(t);
       }
       $('members-search').addEventListener('input', renderMembers);
+
+      // ---- notes to leadership ----
+      async function loadNotesCount() {
+        try { const n = await rpc('admin_notes_count', { p_pass: pass }); $('notes-badge').textContent = n; $('notes-badge').hidden = !n; } catch (e) {}
+      }
+      async function loadNotes() {
+        const box = $('notes'); box.innerHTML = '';
+        try { notes = await rpc('admin_notes', { p_pass: pass, p_include_handled: $('notes-handled').checked }); }
+        catch (e) { box.appendChild(el('p', { class: 'notice' }, 'Run supabase/notes.sql first (' + e.message + ').')); return; }
+        if (!notes.length) { box.appendChild(el('p', { class: 'empty' }, $('notes-handled').checked ? 'No notes yet.' : 'Nothing waiting — all notes are handled.')); loadNotesCount(); return; }
+        const kindLabel = { housing: { have: 'Has housing', need: 'Needs housing' }, jobs: { have: 'Has a job opening', need: 'Looking for work' } };
+        for (const n of notes) {
+          const when = new Date(n.created_at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          box.appendChild(el('div', { class: 'note' + (n.handled_at ? ' handled' : '') }, [
+            el('div', { class: 'head' }, [
+              el('span', { class: 'pill ' + n.topic }, n.topic === 'housing' ? 'Housing' : 'Jobs'),
+              el('span', { class: 'pill ' + (n.kind === 'need' ? 'need' : '') }, kindLabel[n.topic][n.kind]),
+              el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px' }, when),
+            ]),
+            el('div', { class: 'msg' }, n.message),
+            el('div', { class: 'who' }, (n.name ? n.name : 'No name given') + (n.contact ? ' · ' + n.contact : ' · no contact given') + (n.handled_at ? ' · handled' + (n.handled_by ? ' by ' + n.handled_by : '') : '')),
+            el('div', { class: 'actions' }, [
+              el('button', { class: 'chip', onclick: async () => { await rpc('admin_note_handled', { p_pass: pass, p_id: n.id, p_handled: !n.handled_at, p_by: null }); loadNotes(); } }, n.handled_at ? 'Mark as open' : 'Mark handled'),
+              el('button', { class: 'chip', onclick: async () => { if (!confirm('Delete this note permanently?')) return; await rpc('admin_note_delete', { p_pass: pass, p_id: n.id }); loadNotes(); } }, 'Delete'),
+            ]),
+          ]));
+        }
+        loadNotesCount();
+      }
+      $('notes-handled').addEventListener('change', loadNotes);
+      document.querySelector('.tab[data-pane=notes]').addEventListener('click', loadNotes);
 
       // ---- settings ----
       async function loadSettings() {

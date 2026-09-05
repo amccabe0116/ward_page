@@ -46,6 +46,19 @@
       <div class="card connect">
         <p class="connect-sub">Ward chatter, rides, last-minute plans — join the group and the chat.</p>
         <nav class="links" id="links" aria-label="Community links"></nav>
+        <p class="connect-sub second">Need something more private? Send a note straight to ward leadership — nobody else sees it.</p>
+        <nav class="help-links" aria-label="Notes to leadership">
+          <a class="help-link" href="contact.html?topic=housing">
+            <span class="icon" id="icon-housing"></span>
+            <span><span class="label">Housing</span><span class="sub">I have a room available · I need a place</span></span>
+            <span class="chev" id="chev-housing"></span>
+          </a>
+          <a class="help-link" href="contact.html?topic=jobs">
+            <span class="icon" id="icon-jobs"></span>
+            <span><span class="label">Jobs</span><span class="sub">I'm hiring · I'm looking for work</span></span>
+            <span class="chev" id="chev-jobs"></span>
+          </a>
+        </nav>
       </div>
     </section>
 
@@ -71,6 +84,10 @@
       document.getElementById('icon-prs').innerHTML = icons.people;
       document.getElementById('chev-ss').innerHTML = icons.chevron;
       document.getElementById('chev-prs').innerHTML = icons.chevron;
+      document.getElementById('icon-housing').innerHTML = icons.home;
+      document.getElementById('icon-jobs').innerHTML = icons.briefcase;
+      document.getElementById('chev-housing').innerHTML = icons.chevron;
+      document.getElementById('chev-jobs').innerHTML = icons.chevron;
 
       const links = document.getElementById('links');
       const L = NP.C.links || {};
@@ -82,7 +99,8 @@
         if (!L[k]) continue;
         links.appendChild(el('a', { class: 'link ' + k, href: L[k], target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: icon }), label]));
       }
-      document.getElementById('connect').hidden = !links.children.length;
+      links.hidden = !links.children.length;
+      document.getElementById('connect').hidden = false;
 
       document.getElementById('today').textContent = new Date().toLocaleDateString('en-US', { timeZone: NP.C.timeZone, weekday: 'long', month: 'long', day: 'numeric' });
 

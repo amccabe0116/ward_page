@@ -5,7 +5,8 @@ Sunday roll + weekly announcements for the North Point YSA Ward.
 ```
 index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
-admin.html          passphrase-gated: attendance by Sunday, member list, LCR sync notes
+contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
+admin.html          Leaders page: 12-hour login, attendance by Sunday, Housing & Jobs inbox, members, settings
 config.js           Supabase URL / anon key (public by design)
 announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
@@ -14,6 +15,8 @@ scripts/lcr-sync.js runs inside a signed-in LCR tab: roster → Supabase, check-
 scripts/announcements.gs          Google Apps Script: announcements email → repo, every Sunday night
 scripts/publish_announcements.py  same thing from a raw .eml, for manual use
 supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
+supabase/windows.sql              check-in time windows + settings (part of schema.sql too)
+supabase/notes.sql                notes to leadership + hardened Leaders login (part of schema.sql too)
 ```
 
 ## How it fits together
@@ -29,6 +32,17 @@ supabase/guests.sql               guests/visitors table + functions (part of sch
    Attendance report in Claude's browser pane and runs `lcr-sync.js`, which refreshes the roster
    from the page and clicks the attendance buttons for everyone who checked in on the site.
    Rows show as *synced* on the admin page once LCR has them.
+
+## Security model
+
+- The public key in `config.js` can only call the functions granted to `anon` — roll lookups,
+  check-ins, note submission. Every table has RLS on and no anon policies, so nothing is readable
+  directly.
+- Everything under **Leaders** goes through `_check_admin()`: a 12-hour session token from
+  `admin_login()` (bcrypt cost 10 passphrase check; 10 failures lock the page for 15 minutes; a
+  wrong passphrase costs a full second), or the passphrase itself for the sync scripts.
+- Notes to leadership (`leader_notes`) are only ever returned by the admin functions. Pick a long
+  passphrase and keep HTTPS enforced on GitHub Pages.
 
 ## Setup (one time)
 

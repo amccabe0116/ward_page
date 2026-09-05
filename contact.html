@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Note to leadership · North Point YSA</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">Private note</p>
+    <h1 id="title">Housing</h1>
+    <p class="date" id="subtitle"></p>
+  </header>
+
+  <main class="wrap" id="main">
+    <div class="private">
+      <span class="ic" id="lock-icon"></span>
+      <span><b>Private.</b> Only ward leadership sees this. It is never posted on the site or shared with the ward.</span>
+    </div>
+
+    <div class="chips" id="kind" role="radiogroup" aria-label="Which describes you"></div>
+
+    <div class="field">
+      <label for="message" id="message-label">What should leadership know?</label>
+      <textarea id="message" rows="5" maxlength="2000" placeholder=""></textarea>
+    </div>
+    <div class="field">
+      <label for="name">Your name <span class="opt">(optional, but it helps us follow up)</span></label>
+      <input id="name" type="text" maxlength="80" autocomplete="name">
+    </div>
+    <div class="field">
+      <label for="contact">Best way to reach you <span class="opt">(optional — phone or email)</span></label>
+      <input id="contact" type="text" maxlength="120" autocomplete="tel" inputmode="text">
+    </div>
+    <div class="notice error" id="error" hidden></div>
+    <div class="actionbar">
+      <button class="btn" id="send">Send to leadership</button>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (function () {
+      const { rpc, el, toast, icons } = NP;
+      const params = new URLSearchParams(location.search);
+      const topic = params.get('topic') === 'jobs' ? 'jobs' : 'housing';
+      const COPY = {
+        housing: {
+          title: 'Housing', subtitle: 'Have a room to fill, or looking for a place?',
+          kinds: [['have', 'I have housing available'], ['need', "I'm looking for housing"]],
+          placeholder: { have: 'Where it is, when it’s available, roommates, rent, anything else.', need: 'Area, budget, move-in timing, anything else that matters.' },
+        },
+        jobs: {
+          title: 'Jobs', subtitle: 'Hiring, or job hunting?',
+          kinds: [['have', 'I have a job opening'], ['need', "I'm looking for work"]],
+          placeholder: { have: 'The role, the company, how to apply, who to talk to.', need: 'What kind of work you’re after, your background, your availability.' },
+        },
+      }[topic];
+      document.getElementById('title').textContent = COPY.title;
+      document.getElementById('subtitle').textContent = COPY.subtitle;
+      document.getElementById('lock-icon').innerHTML = icons.lock;
+      document.title = COPY.title + ' · North Point YSA';
+
+      let kind = params.get('kind') === 'need' ? 'need' : 'have';
+      const kindEl = document.getElementById('kind'), msg = document.getElementById('message');
+      function paintKinds() {
+        kindEl.innerHTML = '';
+        for (const [k, label] of COPY.kinds) kindEl.appendChild(el('button', { class: 'chip' + (k === kind ? ' on' : ''), role: 'radio', 'aria-checked': String(k === kind), onclick: () => { kind = k; paintKinds(); } }, label));
+        msg.placeholder = COPY.placeholder[kind];
+      }
+      paintKinds();
+
+      const sendBtn = document.getElementById('send'), errEl = document.getElementById('error');
+      sendBtn.addEventListener('click', async () => {
+        errEl.hidden = true;
+        const text = msg.value.trim();
+        if (text.length < 5) { errEl.textContent = 'Please write a few words so leadership knows how to help.'; errEl.hidden = false; msg.focus(); return; }
+        sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+        try {
+          await rpc('submit_note', { p_topic: topic, p_kind: kind, p_message: text, p_name: document.getElementById('name').value, p_contact: document.getElementById('contact').value });
+          const main = document.getElementById('main'); main.hidden = true;
+          const view = el('div', { class: 'success' }, [
+            el('div', { class: 'check', html: icons.check }),
+            el('h2', {}, 'Sent to leadership'),
+            el('p', {}, 'Thank you. Someone will follow up' + (document.getElementById('contact').value.trim() ? ' using the contact you gave.' : ' — if you left no contact, they may reach out through the ward.')),
+            el('a', { class: 'btn', href: 'index.html', style: 'text-decoration:none' }, 'Back to home'),
+          ]);
+          document.body.appendChild(view); window.scrollTo(0, 0);
+        } catch (e) {
+          errEl.textContent = e.message; errEl.hidden = false;
+          sendBtn.disabled = false; sendBtn.textContent = 'Send to leadership';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

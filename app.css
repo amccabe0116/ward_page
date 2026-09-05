@@ -55,6 +55,7 @@ button { font-family: inherit; }
 .hero .date { margin: 10px 0 0; color: rgba(255,255,255,0.78); font-size: 15px; }
 .hero.compact { padding: 18px 18px 20px; }
 .hero.compact h1 { font-size: 24px; }
+.hero.compact .eyebrow { padding: 0 72px; }
 .hero .back {
   position: absolute; left: 14px; top: 16px; color: #fff; text-decoration: none;
   font-size: 14px; opacity: 0.85; padding: 6px 8px; border-radius: 8px;
@@ -100,6 +101,31 @@ button { font-family: inherit; }
 .link .ic svg { width: 14px; height: 14px; }
 .link.facebook .ic { background: #1877f2; }
 .link.whatsapp .ic { background: #25d366; }
+
+/* Notes to leadership */
+.private { display: flex; gap: 10px; align-items: flex-start; background: #f2ecdd; border: 1px solid #e8dcbd; border-radius: 12px; padding: 12px 14px; font-size: 14px; color: #5a4a1e; margin: 16px 0 14px; }
+.private .ic { width: 18px; height: 18px; flex: none; margin-top: 2px; color: #7a5a12; }
+.private .ic svg { width: 18px; height: 18px; }
+.private b { color: #3d3416; }
+.field .opt { color: var(--muted); font-weight: 400; }
+.field textarea { min-height: 120px; resize: vertical; font-family: inherit; font-size: 16px; }
+.field input, .field textarea { font-size: 16px; }
+.help-links { display: grid; gap: 10px; margin-top: 14px; }
+.help-link { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--paper); }
+.help-link .icon { width: 36px; height: 36px; border-radius: 10px; flex: none; display: grid; place-items: center; background: #f2ecdd; color: var(--navy); }
+.help-link .icon svg { width: 20px; height: 20px; }
+.help-link .label { font-weight: 600; display: block; }
+.help-link .sub { color: var(--muted); font-size: 13px; display: block; }
+.help-link .chev { margin-left: auto; color: var(--muted); }
+.connect-sub.second { margin-top: 18px; }
+.tab .badge { display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 6px; border-radius: 999px; background: var(--gold); color: #fff; font-size: 11px; font-weight: 700; vertical-align: middle; }
+.note { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--card); margin-bottom: 10px; }
+.note.handled { opacity: .6; }
+.note .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.note .msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .who { color: var(--muted); font-size: 13px; margin-top: 8px; }
+.note .actions { display: flex; gap: 8px; margin-top: 10px; }
+.pill.housing { background: #e6f0fa; color: #1d4e89; } .pill.jobs { background: #eef6e9; color: #2f6b2f; } .pill.need { background: #fff3e0; color: #8a5a00; }
 
 /* Sections */
 .section-title {
@@ -242,7 +268,8 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .field input, .field select, .field textarea {
   font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
 }
-.field textarea { min-height: 120px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.field textarea { min-height: 120px; }
+#import-json { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .inline { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .stat { display: inline-grid; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); min-width: 110px; }
 .stat b { font-size: 22px; }
