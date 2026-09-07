@@ -101,6 +101,8 @@ button { font-family: inherit; }
 .link .ic svg { width: 14px; height: 14px; }
 .link.facebook .ic { background: #1877f2; }
 .link.whatsapp .ic { background: #25d366; }
+.link.sms .ic { background: #34c759; }
+.connect-hint { font-size: 13px; margin: 10px 0 0; }
 
 /* Notes to leadership */
 .private { display: flex; gap: 10px; align-items: flex-start; background: #f2ecdd; border: 1px solid #e8dcbd; border-radius: 12px; padding: 12px 14px; font-size: 14px; color: #5a4a1e; margin: 16px 0 14px; }

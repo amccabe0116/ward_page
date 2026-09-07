@@ -15,5 +15,7 @@ window.NP_CONFIG = {
   links: {
     facebook: 'https://www.facebook.com/share/g/1EBje3B48V/',
     whatsapp: 'https://chat.whatsapp.com/HHJ3Wfl0GXxEe5MCjABduZ',
+    // Ward text list: opens a text to this number with the message started for them.
+    textList: { number: '770-470-3577', body: 'Please add me to the ward text list. My name is ' },
   },
 };

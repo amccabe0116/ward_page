@@ -46,6 +46,7 @@
       <div class="card connect">
         <p class="connect-sub">Ward chatter, rides, last-minute plans — join the group and the chat.</p>
         <nav class="links" id="links" aria-label="Community links"></nav>
+        <p class="connect-hint muted" id="connect-hint"></p>
         <p class="connect-sub second">Need something more private? Send a note straight to ward leadership — nobody else sees it.</p>
         <nav class="help-links" aria-label="Notes to leadership">
           <a class="help-link" href="contact.html?topic=housing">
@@ -105,6 +106,12 @@
       for (const [k, label, icon] of defs) {
         if (!L[k]) continue;
         links.appendChild(el('a', { class: 'link ' + k, href: L[k], target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: icon }), label]));
+      }
+      if (L.textList && L.textList.number) {
+        const digits = L.textList.number.replace(/\D/g, '');
+        const href = 'sms:+1' + digits + '?&body=' + encodeURIComponent(L.textList.body || '');
+        links.appendChild(el('a', { class: 'link sms', href, title: 'Text "please add me" with your name to ' + L.textList.number }, [el('span', { class: 'ic', html: icons.sms }), 'Ward text list']));
+        document.getElementById('connect-hint').textContent = 'Ward text list: text your name and “please add me” to ' + L.textList.number + ' — or tap the button and the message is started for you.';
       }
       links.hidden = !links.children.length;
       document.getElementById('connect').hidden = false;
