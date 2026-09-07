@@ -6,6 +6,7 @@ Sunday roll + weekly announcements for the North Point YSA Ward.
 index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
+bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
 admin.html          Leaders page: 12-hour login, attendance by Sunday, Housing & Jobs inbox, members, settings
 config.js           Supabase URL / anon key (public by design)
 announcements.json  written by the Sunday-night announcements job
@@ -17,6 +18,7 @@ scripts/publish_announcements.py  same thing from a raw .eml, for manual use
 supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
 supabase/windows.sql              check-in time windows + settings (part of schema.sql too)
 supabase/notes.sql                notes to leadership + hardened Leaders login (part of schema.sql too)
+supabase/inbox.sql                editable announcements + Bishop meeting requests (part of schema.sql too)
 ```
 
 ## How it fits together
@@ -26,8 +28,10 @@ supabase/notes.sql                notes to leadership + hardened Leaders login (
    can only call the roll functions (see the grants in `schema.sql`).
 2. **Sunday night — announcements.** A Google Apps Script in Joseph's account
    (`scripts/announcements.gs`) reads the "Northpoint YSA Ward Weekly Announcements" email
-   (sent from LCR), commits `announcements.json` + the flyers to `img/`, and archives the email
-   under the `NPYSA/Announcements` label. GitHub Pages redeploys in about a minute.
+   (sent from LCR), commits the flyers to `img/` and a fallback `announcements.json`, publishes
+   the text into the `announcements` table, and archives the email under `NPYSA/Announcements`.
+   Leaders can edit the current week on the Leaders page; the home page reads the database
+   first and falls back to the JSON.
 3. **Sunday night — LCR.** A second task (bound to Joseph's Mac) opens LCR's Class and Quorum
    Attendance report in Claude's browser pane and runs `lcr-sync.js`, which refreshes the roster
    from the page and clicks the attendance buttons for everyone who checked in on the site.

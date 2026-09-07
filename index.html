@@ -58,6 +58,11 @@
             <span><span class="label">Jobs</span><span class="sub">I'm hiring · I'm looking for work</span></span>
             <span class="chev" id="chev-jobs"></span>
           </a>
+          <a class="help-link" href="bishop.html">
+            <span class="icon" id="icon-bishop"></span>
+            <span><span class="label">Meet with the Bishop</span><span class="sub">Interviews, temple recommends, or just to talk</span></span>
+            <span class="chev" id="chev-bishop"></span>
+          </a>
         </nav>
       </div>
     </section>
@@ -88,6 +93,8 @@
       document.getElementById('icon-jobs').innerHTML = icons.briefcase;
       document.getElementById('chev-housing').innerHTML = icons.chevron;
       document.getElementById('chev-jobs').innerHTML = icons.chevron;
+      document.getElementById('icon-bishop').innerHTML = icons.handshake;
+      document.getElementById('chev-bishop').innerHTML = icons.chevron;
 
       const links = document.getElementById('links');
       const L = NP.C.links || {};
@@ -121,8 +128,10 @@
 
       const box = document.getElementById('announcements');
       const meta = document.getElementById('ann-meta');
-      fetch('announcements.json?v=' + Date.now(), { cache: 'no-store' })
-        .then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)))
+      // Announcements: the database copy (editable by leaders) wins; the repo's JSON is the fallback.
+      const fromDb = NP.rpc('current_announcements').then(rows => { const a = rows && rows[0]; if (!a || (!a.text && !(a.images || []).length)) throw new Error('empty'); return a; });
+      const fromJson = () => fetch('announcements.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)));
+      fromDb.catch(fromJson)
         .then(a => {
           box.innerHTML = '';
           if (!a || (!a.text && !(a.images && a.images.length))) {

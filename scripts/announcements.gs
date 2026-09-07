@@ -8,8 +8,11 @@
  * One-time setup (about 3 minutes):
  *   1. script.google.com → New project → name it "NPYSA announcements" → replace the editor
  *      contents with this file → Save.
- *   2. Project Settings (gear) → Script properties → Add property:
- *        GITHUB_TOKEN = the fine-grained GitHub token (Contents: read/write on the repo)
+ *   2. Project Settings (gear) → Script properties → Add properties:
+ *        GITHUB_TOKEN  = the fine-grained GitHub token (Contents: read/write on the repo)
+ *        SUPABASE_URL  = https://utkbhlyvmfbtjyfqeoze.supabase.co
+ *        SUPABASE_KEY  = the publishable (anon) key from config.js
+ *        ADMIN_PASS    = the Leaders passphrase (so the text lands in the editable copy too)
  *   3. Back in the editor, pick `publishAnnouncements` in the function dropdown → Run.
  *      Approve the Gmail + "connect to external service" permissions the first time.
  *      The execution log shows what it published.
@@ -92,6 +95,21 @@ function publishAnnouncements() {
     files: files,
   };
   ghPut_(token, 'announcements.json', Utilities.base64Encode(JSON.stringify(data, null, 2), Utilities.Charset.UTF_8), 'Announcements for ' + stamp, existing && existing.sha);
+
+  // 6b. the editable copy the site actually shows (Leaders → Announcements). Optional but recommended.
+  const props = PropertiesService.getScriptProperties();
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  if (sbUrl && sbKey && adminPass) {
+    const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_publish_announcements', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
+      payload: JSON.stringify({ p_pass: adminPass, p_text: text, p_images: images, p_files: files, p_subject: data.subject, p_sent_at: data.sent_at, p_message_id: msgId, p_source: 'email' }),
+    });
+    if (res.getResponseCode() >= 300) Logger.log('Supabase publish failed: %s %s', res.getResponseCode(), res.getContentText().slice(0, 200));
+    else Logger.log('Supabase announcements row: %s', res.getContentText());
+  } else {
+    Logger.log('SUPABASE_URL / SUPABASE_KEY / ADMIN_PASS not set — site will use announcements.json until leaders save a copy.');
+  }
 
   // 7. tidy the inbox
   if (!latest.isInTrash()) {

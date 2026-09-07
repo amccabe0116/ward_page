@@ -37,9 +37,10 @@
     <div id="app" hidden>
       <div class="tabs">
         <button class="tab on" data-pane="attendance">Attendance</button>
-        <button class="tab" data-pane="notes">Housing &amp; Jobs<span class="badge" id="notes-badge" hidden></span></button>
+        <button class="tab" data-pane="notes">Inbox<span class="badge" id="notes-badge" hidden></span></button>
+        <button class="tab" data-pane="announcements">Announcements</button>
         <button class="tab" data-pane="members">Members</button>
-        <button class="tab" data-pane="sync">LCR sync</button>
+        <button class="tab" data-pane="sync">LCR</button>
         <button class="tab" data-pane="settings">Settings</button>
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
       </div>
@@ -66,10 +67,24 @@
       <!-- Notes to leadership -->
       <section class="pane" id="pane-notes">
         <div class="inline" style="justify-content:space-between">
-          <span class="muted">Private notes from the Housing and Jobs forms. Only people with this passphrase can see them.</span>
+          <span class="muted">Meeting requests for the Bishop and private Housing / Jobs notes. Only people signed in here can see them.</span>
           <label class="inline muted" style="gap:6px"><input id="notes-handled" type="checkbox"> Show handled</label>
         </div>
-        <div id="notes" style="margin-top:12px"></div>
+        <div id="notes" style="margin-top:4px"></div>
+      </section>
+
+      <!-- Announcements editor -->
+      <section class="pane" id="pane-announcements">
+        <div class="card ann-editor">
+          <div class="inline" style="justify-content:space-between">
+            <h3 style="margin:0">This week's announcements</h3>
+            <span class="muted" id="ann-meta"></span>
+          </div>
+          <p class="muted">Edits go live on the home page within a minute. Every Sunday night the new email replaces this automatically.</p>
+          <div class="field"><label for="ann-text">Text</label><textarea id="ann-text"></textarea></div>
+          <div class="field"><label>Flyers &amp; files</label><div class="ann-files" id="ann-files"></div></div>
+          <div class="inline"><button class="btn small" id="ann-save">Save</button><button class="btn small secondary" id="ann-load-json">Start from what's on the site now</button><span class="muted" id="ann-msg"></span></div>
+        </div>
       </section>
 
       <!-- Members -->
@@ -276,15 +291,39 @@
       }
       $('members-search').addEventListener('input', renderMembers);
 
-      // ---- notes to leadership ----
+      // ---- inbox: meeting requests + notes to leadership ----
+      let meetings = [];
       async function loadNotesCount() {
         try { const n = await rpc('admin_notes_count', { p_pass: pass }); $('notes-badge').textContent = n; $('notes-badge').hidden = !n; } catch (e) {}
       }
       async function loadNotes() {
         const box = $('notes'); box.innerHTML = '';
-        try { notes = await rpc('admin_notes', { p_pass: pass, p_include_handled: $('notes-handled').checked }); }
+        const incl = $('notes-handled').checked;
+        try { notes = await rpc('admin_notes', { p_pass: pass, p_include_handled: incl }); }
         catch (e) { box.appendChild(el('p', { class: 'notice' }, 'Run supabase/notes.sql first (' + e.message + ').')); return; }
-        if (!notes.length) { box.appendChild(el('p', { class: 'empty' }, $('notes-handled').checked ? 'No notes yet.' : 'Nothing waiting — all notes are handled.')); loadNotesCount(); return; }
+        try { meetings = await rpc('admin_meeting_requests', { p_pass: pass, p_include_handled: incl }); } catch (e) { meetings = []; }
+        const fmtWhen = iso => new Date(iso).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+        box.appendChild(el('h3', { class: 'inbox-title' }, 'Meeting requests for the Bishop'));
+        if (!meetings.length) box.appendChild(el('p', { class: 'empty' }, incl ? 'No requests yet.' : 'No open requests.'));
+        for (const m of meetings) {
+          box.appendChild(el('div', { class: 'note' + (m.handled_at ? ' handled' : '') }, [
+            el('div', { class: 'head' }, [
+              el('span', { class: 'pill ' + (m.temple_recommend ? 'recommend' : '') }, m.temple_recommend ? 'Temple recommend interview' : 'Meeting with the Bishop'),
+              el('span', { class: 'muted', style: 'margin-left:auto;font-size:12px' }, fmtWhen(m.created_at)),
+            ]),
+            el('div', { class: 'msg' }, [el('b', {}, m.name), ' · ', el('a', { href: 'tel:' + m.phone.replace(/\D/g, '') }, m.phone), ' · ', el('a', { href: 'mailto:' + m.email }, m.email)]),
+            m.note ? el('div', { class: 'who' }, '“' + m.note + '”') : null,
+            m.handled_at ? el('div', { class: 'who' }, 'Handled' + (m.handled_by ? ' by ' + m.handled_by : '')) : null,
+            el('div', { class: 'actions' }, [
+              el('button', { class: 'chip', onclick: async () => { await rpc('admin_meeting_handled', { p_pass: pass, p_id: m.id, p_handled: !m.handled_at, p_by: null }); loadNotes(); } }, m.handled_at ? 'Mark as open' : 'Mark scheduled'),
+              el('button', { class: 'chip', onclick: async () => { if (!confirm(`Delete the request from ${m.name}?`)) return; await rpc('admin_meeting_delete', { p_pass: pass, p_id: m.id }); loadNotes(); } }, 'Delete'),
+            ]),
+          ]));
+        }
+
+        box.appendChild(el('h3', { class: 'inbox-title' }, 'Housing & Jobs'));
+        if (!notes.length) { box.appendChild(el('p', { class: 'empty' }, incl ? 'No notes yet.' : 'Nothing waiting — all notes are handled.')); loadNotesCount(); return; }
         const kindLabel = { housing: { have: 'Has housing', need: 'Needs housing' }, jobs: { have: 'Has a job opening', need: 'Looking for work' } };
         for (const n of notes) {
           const when = new Date(n.created_at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -306,6 +345,48 @@
       }
       $('notes-handled').addEventListener('change', loadNotes);
       document.querySelector('.tab[data-pane=notes]').addEventListener('click', loadNotes);
+
+      // ---- announcements editor ----
+      let ann = null;  // current row from the database (or null)
+      function renderAnnFiles() {
+        const box = $('ann-files'); box.innerHTML = '';
+        const all = [...(ann && ann.images || []).map(x => ({ ...x, _t: 'images' })), ...(ann && ann.files || []).map(x => ({ ...x, _t: 'files' }))];
+        if (!all.length) { box.appendChild(el('span', { class: 'muted' }, 'None attached.')); return; }
+        for (const f of all) box.appendChild(el('span', { class: 'chip' }, [
+          el('a', { href: f.path, target: '_blank', rel: 'noopener' }, f.name || f.path.split('/').pop()),
+          el('button', { class: 'x', title: 'Remove from the site', style: 'border:0;background:none;cursor:pointer', onclick: () => { ann[f._t] = ann[f._t].filter(x => x.path !== f.path); renderAnnFiles(); } }, '×'),
+        ]));
+      }
+      async function loadAnnouncements() {
+        $('ann-msg').textContent = '';
+        try {
+          const rows = await rpc('current_announcements');
+          ann = rows && rows[0] ? { id: rows[0].id, text: rows[0].text || '', images: rows[0].images || [], files: rows[0].files || [], sent_at: rows[0].sent_at, updated_at: rows[0].updated_at } : null;
+        } catch (e) { $('ann-msg').textContent = 'Run supabase/inbox.sql first (' + e.message + ').'; ann = null; }
+        $('ann-text').value = ann ? ann.text : '';
+        $('ann-meta').textContent = ann ? ('Email of ' + (ann.sent_at ? fmtDate(ann.sent_at.slice(0, 10), { weekday: undefined }) : '—') + ' · last edited ' + new Date(ann.updated_at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : 'Nothing in the database yet';
+        $('ann-load-json').hidden = !!ann;
+        renderAnnFiles();
+      }
+      $('ann-load-json').addEventListener('click', async () => {
+        try {
+          const j = await (await fetch('announcements.json?v=' + Date.now(), { cache: 'no-store' })).json();
+          ann = { id: null, text: j.text || '', images: (j.images || []).map(x => typeof x === 'string' ? { path: x, name: x.split('/').pop() } : x), files: j.files || [], sent_at: j.sent_at, subject: j.subject };
+          $('ann-text').value = ann.text; renderAnnFiles(); $('ann-msg').textContent = 'Loaded from the site — press Save to keep it.';
+        } catch (e) { $('ann-msg').textContent = 'Could not load announcements.json: ' + e.message; }
+      });
+      $('ann-save').addEventListener('click', async () => {
+        const text = $('ann-text').value;
+        try {
+          if (ann && ann.id) {
+            await rpc('admin_update_announcements', { p_pass: pass, p_id: ann.id, p_text: text, p_images: ann.images, p_files: ann.files, p_by: null });
+          } else {
+            await rpc('admin_publish_announcements', { p_pass: pass, p_text: text, p_images: ann ? ann.images : [], p_files: ann ? ann.files : [], p_subject: ann && ann.subject || 'Weekly Announcements', p_sent_at: ann && ann.sent_at || new Date().toISOString(), p_message_id: null, p_source: 'leaders' });
+          }
+          $('ann-msg').textContent = 'Saved — live on the home page now.'; await loadAnnouncements(); $('ann-msg').textContent = 'Saved — live on the home page now.';
+        } catch (e) { $('ann-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      document.querySelector('.tab[data-pane=announcements]').addEventListener('click', loadAnnouncements);
 
       // ---- settings ----
       async function loadSettings() {

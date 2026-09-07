@@ -127,6 +127,15 @@ button { font-family: inherit; }
 .note .actions { display: flex; gap: 8px; margin-top: 10px; }
 .pill.housing { background: #e6f0fa; color: #1d4e89; } .pill.jobs { background: #eef6e9; color: #2f6b2f; } .pill.need { background: #fff3e0; color: #8a5a00; }
 
+label.check { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin: 6px 0 12px; font-size: 16px; cursor: pointer; }
+label.check input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--navy); flex: none; }
+.pill.recommend { background: #f2ecdd; color: #6b4e0b; }
+.inbox-title { font-family: var(--serif); font-size: 18px; margin: 18px 0 8px; }
+.ann-editor textarea { min-height: 320px; font-size: 15px; line-height: 1.5; }
+.ann-files { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.ann-files .chip { display: inline-flex; gap: 6px; align-items: center; }
+.ann-files .chip .x { color: var(--danger); font-weight: 700; }
+
 /* Sections */
 .section-title {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
@@ -253,7 +262,7 @@ button { font-family: inherit; }
 .notice.error { background: #fff0f0; border-color: #f3c2c2; color: #8f1d1d; }
 
 /* Admin */
-.tabs { display: flex; gap: 6px; margin: 16px 0 10px; border-bottom: 1px solid var(--line); }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 16px 0 10px; border-bottom: 1px solid var(--line); }
 .tab { background: none; border: 0; padding: 10px 12px; font-size: 15px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
 .tab.on { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
 .pane { display: none; } .pane.on { display: block; }
