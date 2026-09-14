@@ -33,12 +33,23 @@ Config: SUPABASE_URL=<url>, ANON_KEY=<publishable key>, PASS=<admin passphrase>.
 5. In the LCR tab run lcr-sync with
    window.NP_SYNC = { mode: 'push', week: <week>, pending: <pending array> };
 6. In the site tab run db-sync with { action: 'mark', ids: <synced ids from step 5> }.
-7. If `noCell` or `failed` are non-empty, retry step 5 once with just those; then report.
-8. Report in one paragraph: week, pushed / already marked / failed (with names from `pending`).
+7. If `failed` is non-empty, retry step 5 once with just those. `noCell` means the person's
+   record has left the ward (or arrived after the last roster refresh) — refresh the roster
+   (below), rerun steps 4–6, and list anyone still without a cell by name.
+8. Guests: NOT sent to LCR (Joseph's call, Sept 2026 — LCR's Visitors tab only takes men/women
+   totals). Just list them in the report. If a guest's name matches a roster member, they
+   probably typed their name before the roster refresh picked them up: add them on the Leaders
+   page as that member instead and remove the guest row.
+9. Report in one paragraph: week, pushed / already marked / no cell (with names from `pending`).
 
-Monthly (first Sunday) also refresh the roster:
+Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
    LCR tab: window.NP_SYNC = { mode: 'roster', week: <week>, from: 0, to: 140 } then { from: 140, to: 400 }
-   site tab: db-sync { action: 'roster', classes, members: <slice>, deactivateMissing: false } for
-   each slice, then one final { action: 'roster', classes, members: <all>, deactivateMissing: true }
-   only if you can send all members in one call; otherwise skip deactivation and say so.
+   site tab: collect both slices in a window variable, then ONE db-sync call
+             { action: 'roster', classes, members: <all>, deactivateMissing: true }.
+   (Sending slices with deactivateMissing:true would deactivate everyone not in that slice.)
 ```
+
+First real run (2026-09-14, from Joseph's Mac): Sept 6 → 116 of 119 check-ins into LCR, Sept 13 →
+105 of 105; 112 + 104 clicks took about 2 minutes each. Three Sept 6 rows stay "pending" forever
+because those two records moved out of the ward before the sync (Makayla Blair, Trey Gaul). The
+LCR sign-in lasted under an hour, so the run has to start right after Joseph signs in.

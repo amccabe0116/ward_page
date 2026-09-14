@@ -35,7 +35,8 @@ supabase/inbox.sql                editable announcements + Bishop meeting reques
 3. **Sunday night — LCR.** A second task (bound to Joseph's Mac) opens LCR's Class and Quorum
    Attendance report in Claude's browser pane and runs `lcr-sync.js`, which refreshes the roster
    from the page and clicks the attendance buttons for everyone who checked in on the site.
-   Rows show as *synced* on the admin page once LCR has them.
+   Rows show as *synced* on the admin page once LCR has them. Guests stay on the site only —
+   LCR's Visitors tab takes men/women totals, and the ward chose not to send those.
 
 ## Security model
 

@@ -235,7 +235,7 @@
               el('td', {}, [g.name + ' ', el('span', { class: 'pill' }, 'guest')]),
               el('td', {}, '—'),
               el('td', { class: 'muted' }, new Date(g.created_at).toLocaleTimeString('en-US', { timeZone: C.timeZone, hour: 'numeric', minute: '2-digit' })),
-              el('td', {}, el('span', { class: 'pill ' + (g.synced_to_lcr_at ? 'ok' : 'off') }, g.synced_to_lcr_at ? 'in LCR' : 'add as visitor')),
+              el('td', {}, el('span', { class: 'pill off', title: 'Guests are counted here only; LCR visitor totals are not sent' }, 'not sent to LCR')),
               el('td', {}, el('button', { class: 'chip', onclick: async () => { if (!confirm(`Remove guest ${g.name}?`)) return; await rpc('admin_remove_guest', { p_pass: pass, p_guest_id: g.guest_id }); loadAttendance(); } }, 'Remove')),
             ]));
           }
