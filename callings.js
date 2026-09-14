@@ -265,7 +265,7 @@ window.NPCallings = (function () {
         el('td', { class: 'notes-cell' }, p.notes),
         el('td', {}, p.proposed),
         el('td', {}, p.assignment),
-        el('td', {}, p.texted),
+        el('td', { class: 'center' }, /^\s*y(es)?\s*$/i.test(p.texted) ? el('span', { class: 'tick', title: 'Texted' }, '✓') : p.texted),
         el('td', {}, p.answer),
         el('td', {}, last),
       ]));
@@ -325,7 +325,7 @@ window.NPCallings = (function () {
     const calling = el('section', { class: 'slide-card calling' }, [
       el('h3', {}, ['Calling', el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit')]),
       truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
-      dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', p.texted], ['Answer', p.answer], ['Sustained', p.sustained]]),
+      dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', /^\s*y(es)?\s*$/i.test(p.texted) ? '✓ Yes' : p.texted], ['Answer', p.answer], ['Sustained', /^\s*y(es)?\s*$/i.test(p.sustained) ? '✓ Yes' : p.sustained]]),
       (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
       p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
         el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag], p.flagInferred ? el('span', { class: 'muted' }, ' (found in Other Notes — press Edit to set the Flag column)') : null]),
@@ -377,7 +377,9 @@ window.NPCallings = (function () {
     return el('div', { class: 'slide' }, [head, el('div', { class: 'slide-grid' }, [el('div', { class: 'slide-col' }, [calling, about, attCard]), el('div', { class: 'slide-col' }, formCard)])]);
   }
   // ---------- editing the sheet columns ----------
-  const EDIT_COLS = [['Flag', 'Flag', 'select'], ['Other Notes', 'Other notes', 'textarea'], ['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'input'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'input'], ['Flag sent', 'Flag message sent', 'input']];
+  const EDIT_COLS = [['Flag', 'Flag', 'select'], ['Other Notes', 'Other notes', 'textarea'], ['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'checkbox'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'checkbox'], ['Flag sent', 'Flag message sent', 'input']];
+  // "texted" / "sustained" on the sheet are Y / y / yes (or a name or date); anything but blank / N counts as ticked
+  const isTicked = v => truthy(v) && !/^\s*(n|no)\s*$/i.test(v);
   const FLAG_MEANING = {
     Warning: 'attending here is optional — if they don\'t start coming, their records go back to their home ward.',
     Magnet: 'came in without a new-member meeting — records are being sent back to their previous ward.',
@@ -388,6 +390,11 @@ window.NPCallings = (function () {
       if (kind === 'select') {
         input = el('select', { class: 'edit-field', 'data-key': key }, [el('option', { value: '' }, 'No flag'), el('option', { value: 'Warning' }, 'Warning — may be sent back if they don\'t attend'), el('option', { value: 'Magnet' }, 'Magnet — being sent back (no new-member meeting)')]);
         input.value = p.flag || '';
+      } else if (kind === 'checkbox') {
+        input = el('input', { type: 'checkbox', class: 'edit-field edit-check', 'data-key': key, 'data-orig': p.o[key] || '' });
+        input.checked = isTicked(p.o[key]);
+        const orig = p.o[key] || '';
+        return el('label', { class: 'edit-row check' }, [el('span', {}, label), el('span', { class: 'check-wrap' }, [input, el('span', { class: 'muted' }, orig && !/^\s*y(es)?\s*$/i.test(orig) ? ' (' + orig + ')' : '')])]);
       } else {
         input = el(kind, { class: 'edit-field', 'data-key': key, placeholder: label });
         input.value = p.o[key] || '';
@@ -398,7 +405,11 @@ window.NPCallings = (function () {
     const form = el('form', { class: 'edit-form', onsubmit: async e => {
       e.preventDefault();
       const values = {}; let changed = false;
-      for (const f of form.querySelectorAll('.edit-field')) { const v = f.value.trim(); if (v !== (p.o[f.dataset.key] || '')) { values[f.dataset.key] = v; changed = true; } }
+      for (const f of form.querySelectorAll('.edit-field')) {
+        // a ticked box keeps whatever was there (a name, a date) or becomes Y; unticked clears the cell
+        const v = f.type === 'checkbox' ? (f.checked ? (isTicked(f.dataset.orig) ? f.dataset.orig : 'Y') : '') : f.value.trim();
+        if (v !== (p.o[f.dataset.key] || '')) { values[f.dataset.key] = v; changed = true; }
+      }
       if (p.flagInferred && !('Flag' in values)) { values.Flag = p.flag; changed = true; }  // make the inferred flag real
       if (p.flagInferred && values.Flag === p.flag && !('Other Notes' in values)) { const n = stripFlagWords(p.notes); if (n !== p.notes) values['Other Notes'] = n; }
       if (!changed) { cancel(); return; }

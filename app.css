@@ -350,6 +350,11 @@ body.deck-open { overflow: hidden; }
 .edit-field { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; width: 100%; background: var(--card); color: var(--ink); }
 .edit-field:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(27,42,65,0.12); }
 textarea.edit-field { min-height: 70px; resize: vertical; }
+.edit-row.check { align-items: center; }
+.check-wrap { display: flex; align-items: center; gap: 8px; }
+input.edit-check { width: 22px; height: 22px; accent-color: var(--navy); margin: 0; }
+.cal-grid td.center { text-align: center; }
+.tick { color: var(--ok); font-weight: 700; }
 .edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 .edit-actions .btn { width: auto; }
 @media (max-width: 640px) { .edit-row { grid-template-columns: 1fr; gap: 2px; } }
