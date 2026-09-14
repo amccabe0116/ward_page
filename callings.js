@@ -26,6 +26,7 @@ window.NPCallings = (function () {
   let edits = [];            // rows from callings_edits (site-side edits waiting for / written to the sheet)
   let settings = {};         // settings rows (message templates, due-day thresholds)
   let filter = 'all', query = '', deckAt = -1, loaded = false, loading = null;
+  const savingToSheet = new Set();  // sheet names with a Google Sheet write in flight
 
   // ---------- helpers ----------
   const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -273,7 +274,7 @@ window.NPCallings = (function () {
       const last = p.sheetOnly
         ? (p.deleted
           ? el('span', { class: 'inline-actions' }, [el('span', { class: 'muted' }, 'deleting from sheet on next sync'), el('button', { class: 'chip', onclick: e => { e.stopPropagation(); setDeleted(p, false); } }, 'Undo')])
-          : el('button', { class: 'chip danger', title: 'Remove this row from the Google Sheet on the next sync', onclick: e => { e.stopPropagation(); if (confirm(`Delete ${p.name} from the Members without Callings sheet?`)) setDeleted(p, true); } }, 'Delete'))
+          : el('button', { class: 'chip danger', title: 'Remove this row from the Google Sheet on the next sync', onclick: async e => { e.stopPropagation(); if (await ask(`Delete ${p.name} from the Members without Callings sheet?`)) setDeleted(p, true); } }, 'Delete'))
         : (p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR'));
       tb.appendChild(el('tr', { class: 'cal-row' + (p.deleted ? ' deleted' : ''), tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
         el('td', {}, [el('b', {}, p.name), el('div', { class: 'row-pills' }, [el('span', { class: 'pill ' + st.k }, st.t), sheetOnlyPill(p), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)), p.tag ? el('span', { class: 'pill off' }, p.tag) : null, p.pending ? el('span', { class: 'pill wait', title: 'Edited here; written to the Google Sheet on the next sync' }, '✎ pending') : null])]),
@@ -342,7 +343,7 @@ window.NPCallings = (function () {
     ]);
     const calling = el('section', { class: 'slide-card calling' }, [
       el('h3', {}, ['Calling', el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit'),
-        p.pending && !p.deleted && C.sheetsRefreshUrl ? el('button', { class: 'chip save-sheet-btn', type: 'button', title: 'Write this person\u2019s edits into the Google Sheet now', onclick: e => saveToSheet(p, e.currentTarget) }, 'Save to sheet') : null]),
+        p.pending && !p.deleted && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName) ? el('button', { class: 'chip save-sheet-btn', type: 'button', title: 'Write this person\u2019s edits into the Google Sheet now', onclick: e => saveToSheet(p, e.currentTarget) }, 'Save to sheet') : null]),
       truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', /^\s*y(es)?\s*$/i.test(p.texted) ? '✓ Yes' : p.texted], ['Answer', p.answer], ['Sustained', /^\s*y(es)?\s*$/i.test(p.sustained) ? '✓ Yes' : p.sustained]]),
       (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
@@ -354,7 +355,7 @@ window.NPCallings = (function () {
           (!L['Individual Phone'] && !L['Individual E-mail']) ? el('span', { class: 'muted' }, 'No phone or email in LCR') : null,
         ]),
       ]) : null,
-      p.pending ? el('p', { class: 'muted small' }, C.sheetsRefreshUrl ? 'Edited here · not in the Google Sheet yet — Save to sheet, or it goes in with the next sync' : 'Edited here · goes into the Google Sheet on the next sync') : null,
+      p.pending ? el('p', { class: 'muted small' }, savingToSheet.has(p.sheetName) ? 'Saving to the Google Sheet…' : C.sheetsRefreshUrl ? 'Edited here · not in the Google Sheet yet — Save to sheet, or it goes in with the next sync' : 'Edited here · goes into the Google Sheet on the next sync') : null,
     ]);
     const tr = truthy(L['Temple Recommend Status']) ? L['Temple Recommend Status'] + (truthy(L['Temple Recommend Type']) ? ' · ' + (/proxy/i.test(L['Temple Recommend Type']) ? 'limited-use' : L['Temple Recommend Type'].toLowerCase()) : '') : (p.lcr ? 'None' : '');
     const aboutPairs = [['Temple recommend', tr], ['Ministering brothers', L['Ministering Brothers']], ['Ministering sisters', L['Ministering Sisters']], ['Has children', yes(L['Has Children']) ? 'Yes' : ''],
@@ -398,6 +399,8 @@ window.NPCallings = (function () {
   // ---------- editing the sheet columns ----------
   const EDIT_COLS = [['Flag', 'Flag', 'select'], ['Other Notes', 'Other notes', 'textarea'], ['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'checkbox'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'checkbox'], ['Flag sent', 'Flag message sent', 'datecheck']];
   // "texted" / "sustained" on the sheet are Y / y / yes (or a name or date); anything but blank / N counts as ticked
+  // A yes/no dialog; waits a beat afterwards because Safari can drop a request fired straight after a dialog closes ("Load failed").
+  async function ask(msg) { const ok = confirm(msg); if (ok) await new Promise(r => setTimeout(r, 150)); return ok; }
   const isTicked = v => truthy(v) && !/^\s*(n|no)\s*$/i.test(v);
   const todayMDY = () => new Date().toLocaleDateString('en-US', { timeZone: C.timeZone, month: 'numeric', day: 'numeric', year: 'numeric' });
   const FLAG_MEANING = {
@@ -449,7 +452,9 @@ window.NPCallings = (function () {
         build(); applyFilter();
         const at = view.findIndex(x => x.sheetName === keep);
         if (at >= 0) deckAt = at; else { filter = 'all'; applyFilter(); deckAt = Math.max(0, view.findIndex(x => x.sheetName === keep)); }
-        renderList(); renderDeck(); toast(C.sheetsRefreshUrl ? 'Saved on the site — tap “Save to sheet” to write it into the Google Sheet now' : 'Saved — it goes into the Google Sheet on the next sync', 3500);
+        renderList(); renderDeck();
+        if (C.sheetsRefreshUrl) { toast('Saved — writing it to the Google Sheet…'); saveToSheet(p, null, true); }  // background; the slide updates when it lands
+        else toast('Saved — it goes into the Google Sheet on the next sync');
       } catch (err) { msg.textContent = /admin_callings_edit/.test(err.message) ? 'Run supabase/edits.sql in Supabase first.' : 'Not saved: ' + err.message; }
     } }, [
       ...fields,
@@ -468,11 +473,12 @@ window.NPCallings = (function () {
   async function convertAllFlags() {
     const todo = people.filter(p => p.flagInferred && !p.deleted);
     if (!todo.length) { toast('Nothing to convert'); return; }
-    if (!confirm(`Move the word Warning / Magnet out of Other Notes and into the Flag column for ${todo.length} people? (Written to the sheet on the next sync.)`)) return;
+    if (!(await ask(`Move the word Warning / Magnet out of Other Notes and into the Flag column for ${todo.length} people? (Written to the sheet on the next sync.)`))) return;
     let n = 0;
     try {
       for (const p of todo) {
-        const values = { Flag: p.flag }; const stripped = stripFlagWords(p.notes); if (stripped !== p.notes) values['Other Notes'] = stripped;
+        // an emptied notes cell is an explicit clear (null) — a blank string would never overwrite the sheet
+        const values = { Flag: p.flag }; const stripped = stripFlagWords(p.notes); if (stripped !== p.notes) values['Other Notes'] = stripped || null;
         await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || (p.member && p.member.lcr_uuid) || null, p_values: values, p_by: null }); n++;
       }
     } catch (e) { toast('Stopped after ' + n + ': ' + e.message, 5000); }
@@ -510,7 +516,7 @@ window.NPCallings = (function () {
     const sms = phone ? fill(t['notify_' + k + '_sms'], p) : '', subject = email ? fill(t['notify_' + k + '_email_subject'], p) : '', body = email ? fill(t['notify_' + k + '_email'], p) : '';
     if (!sms && !body) { toast('No message template saved yet — see Settings'); return; }
     const preview = [phone ? `TEXT to ${L['Individual Phone']}:\n${sms}` : null, email ? `EMAIL to ${email}:\n${subject}\n\n${body}` : null].filter(Boolean).join('\n\n—————\n\n');
-    if (!confirm(`Send this to ${p.name}?\n\n${preview}`)) return;
+    if (!(await ask(`Send this to ${p.name}?\n\n${preview}`))) return;
     try {
       const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass: ctx.getPass(), name: p.name, phone, email, flag: p.flag, sms, subject, body, fromName: t.notify_from_name || '', replyTo: t.notify_reply_to || '' }) });
       const j = await r.json();
@@ -519,6 +525,7 @@ window.NPCallings = (function () {
       await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: p.flag, 'Flag sent': today + (j.sms === 'sent' && j.email === 'sent' ? ' (text + email)' : j.sms === 'sent' ? ' (text)' : ' (email)') }, p_by: null });
       edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
       const keep = p.sheetName; build(); applyFilter(); const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; renderList(); renderDeck();
+      saveToSheet(p, null, true);
       toast(`Sent${j.sms === 'sent' ? ' text' : ''}${j.sms === 'sent' && j.email === 'sent' ? ' and' : ''}${j.email === 'sent' ? ' email' : ''} to ${p.name}`);
     } catch (e) { toast('Not sent: ' + e.message, 5000); }
   }
@@ -575,19 +582,31 @@ window.NPCallings = (function () {
     edits = await rpc('admin_callings_edits', { p_pass: pass });
     build(); applyFilter();
     if (keep) { const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; }
-    renderList(); if (!$('deck').hidden) renderDeck();
+    renderList();
+    // don't redraw a slide someone is typing on — it picks up the new state on its next render
+    if (!$('deck').hidden && !$('deck').querySelector('.edit-form')) renderDeck();
   }
-  // "Save to sheet" on a slide: this person's edits → the Google Sheet right now, through the web app.
-  async function saveToSheet(p, btn) {
+  // This person's edits → the Google Sheet right now, through the web app. Runs in the
+  // background after Save / Send (quiet = no toast unless something went wrong) and from the
+  // "Save to sheet" button on a slide.
+  async function saveToSheet(p, btn, quiet) {
     if (!C.sheetsRefreshUrl) { toast('Set up the Google script as a web app first (scripts/announcements.gs)', 4000); return; }
+    if (savingToSheet.has(p.sheetName)) return;
+    savingToSheet.add(p.sheetName);
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
       const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'save', pass: ctx.getPass(), name: p.sheetName }) });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || 'save failed');
+      savingToSheet.delete(p.sheetName);
       await reloadEdits();
-      toast(j.written ? `${p.name} is in the Google Sheet` : `Nothing new to save for ${p.name}`);
-    } catch (e) { toast('Not saved to the sheet: ' + e.message, 4500); if (btn) { btn.disabled = false; btn.textContent = 'Save to sheet'; } }
+      if (!quiet || j.written) toast(j.written ? `${p.name} is in the Google Sheet` : `Nothing new to save for ${p.name}`);
+    } catch (e) {
+      savingToSheet.delete(p.sheetName);
+      toast(`Not in the Google Sheet yet (${e.message}) — it goes in with the next sync, or tap Save to sheet to try again`, 6000);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save to sheet'; }
+      else if (!$('deck').hidden && !$('deck').querySelector('.edit-form')) renderDeck();
+    }
   }
   async function refreshFromGoogle() {
     const url = C.sheetsRefreshUrl;

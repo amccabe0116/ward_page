@@ -2,9 +2,11 @@
 (function () {
   const C = window.NP_CONFIG;
 
-  // Call a Postgres function through Supabase's REST API.
+  // Call a Postgres function through Supabase's REST API. A request that never reached the
+  // server (Safari's "Load failed", Chrome's "Failed to fetch" — e.g. right after a confirm()
+  // dialog, or a flaky phone connection) is tried once more before giving up.
   async function rpc(fn, args) {
-    const res = await fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, {
+    const opts = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -12,7 +14,15 @@
         Authorization: `Bearer ${C.supabaseAnonKey}`,
       },
       body: JSON.stringify(args || {}),
-    });
+    };
+    let res;
+    try { res = await fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, opts); }
+    catch (e) {
+      if (!(e instanceof TypeError)) throw e;
+      await new Promise(r => setTimeout(r, 400));
+      try { res = await fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, opts); }
+      catch (e2) { throw new Error(`Couldn't reach the database (${e2.message}) — check the connection and try again`); }
+    }
     if (!res.ok) {
       let msg = `${res.status}`;
       try { const j = await res.json(); msg = j.message || j.hint || j.details || msg; } catch (e) {}

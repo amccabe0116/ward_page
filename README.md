@@ -54,9 +54,10 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    list plus a meeting deck (one person per slide, ← → to move) for handing out assignments.
    The meeting columns (proposed calling, who texts, texted, answer, sustained, other notes)
    are editable on the slide: edits save to `callings_edits` (`supabase/edits.sql`), show on
-   the site at once, and go into the Google Sheet either with the slide's *Save to sheet* button
-   (web app action `save`, one person) or on `syncMemberSheets`' next run (adding a row for
-   anyone not on the sheet yet, deleting rows marked for deletion). Only the edited columns are
+   the site at once, and are pushed into the Google Sheet in the background right after Save /
+   Send (web app action `save`, one person; a *Save to sheet* button appears on the slide if that
+   push failed), or on `syncMemberSheets`' next run (adding a row for anyone not on the sheet
+   yet, deleting rows marked for deletion). Only the edited columns are
    written, a blank never overwrites a filled cell, and a field someone emptied on the site is
    stored as `null` so that clear does go through. Everything else is still edited in the sheet. **Flag** is its own sheet column (Warning = may be sent
    back to their home ward if they don't attend; Magnet = being sent back, no new-member
