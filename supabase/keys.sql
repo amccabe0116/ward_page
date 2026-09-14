@@ -48,6 +48,11 @@ begin
   delete from keys_scores where id = p_id;
 end $$;
 
+-- A score to beat: the Bishop's.
+insert into public.keys_scores (name, score, level)
+select 'Bishop M.', 2000, 8
+where not exists (select 1 from public.keys_scores where name = 'Bishop M.' and score = 2000);
+
 grant execute on function public.keys_submit(text, int, int) to anon;
 grant execute on function public.keys_top(int)              to anon;
 grant execute on function public.admin_keys_delete(text, bigint) to anon;
