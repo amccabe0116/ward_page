@@ -22,6 +22,7 @@ supabase/windows.sql              check-in time windows + settings (part of sche
 supabase/notes.sql                notes to leadership + hardened Leaders login (part of schema.sql too)
 supabase/inbox.sql                editable announcements + Bishop meeting requests (part of schema.sql too)
 supabase/sheets.sql               mirrors the two leadership Google Sheets (callings doc, new-member form)
+supabase/edits.sql                site-side edits to the callings sheet, written back by the Apps Script
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -50,7 +51,10 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    script is deployed as a web app — `sheetsRefreshUrl` in `config.js`). `callings.js` attaches
    each person's sheet notes, form response and roll check-ins to the LCR row, and shows the
    list plus a meeting deck (one person per slide, ← → to move) for handing out assignments.
-   Read-only: edits still happen in the Google Sheet.
+   The meeting columns (proposed calling, who texts, texted, answer, sustained, other notes)
+   are editable on the slide: edits save to `callings_edits` (`supabase/edits.sql`), show on
+   the site at once, and `syncMemberSheets` writes them into the Google Sheet on its next run
+   (adding a row for anyone not on the sheet yet). Everything else is still edited in the sheet.
 
 ## Security model
 

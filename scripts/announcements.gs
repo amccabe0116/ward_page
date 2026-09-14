@@ -24,6 +24,10 @@
  *      copies the "Members without Callings" doc and the "New Member Form (Responses)" sheet
  *      into the site's database (needs SUPABASE_URL / SUPABASE_KEY / ADMIN_PASS from step 2).
  *   6. Triggers → Add trigger → syncMemberSheets · Time-driven · Hour timer · Every 6 hours.
+ *      The same run also writes any edits leaders made on the site (Leaders › Callings → Edit)
+ *      into the "Members without Callings" sheet — only the meeting columns (proposed calling,
+ *      who texts, texted, answer, sustained, other notes); people not on the sheet get a new row.
+ *      Needs supabase/edits.sql.
  *   7. Optional "Refresh from Google Sheets" button on the Leaders page:
  *      Deploy → New deployment → Web app · Execute as: Me · Who has access: Anyone → Deploy,
  *      copy the web-app URL into `sheetsRefreshUrl` in config.js. The endpoint only does
@@ -146,6 +150,9 @@ function syncMemberSheets() {
   const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
   if (!sbUrl || !sbKey || !adminPass) throw new Error('Set SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Project Settings → Script properties');
   const result = {};
+  // 0. edits made on the Leaders page go into the callings sheet first, so the copy below has them
+  try { result.written = writePendingEdits_(sbUrl, sbKey, adminPass); } catch (e) { Logger.log('Writing edits failed: %s', e && e.message); result.writeError = String(e && e.message); }
+
   MEMBER_SHEETS.forEach(function (s) {
     const ss = SpreadsheetApp.openById(s.id);
     const sheet = s.tab ? ss.getSheetByName(s.tab) : ss.getSheets()[0];
@@ -172,6 +179,52 @@ function syncMemberSheets() {
     Logger.log('%s: %s rows, %s columns', s.key, rows.length, headers.length);
   });
   return result;
+}
+
+// Edits saved on the Leaders page (supabase/edits.sql) → the "Members without Callings" sheet.
+// Finds each person's row by NAME (exact, then ignoring anything in parentheses / accents),
+// appends a new row when they are not on the sheet yet, writes only the edited columns, then
+// tells the database those edits are in. Returns how many were written.
+function writePendingEdits_(sbUrl, sbKey, adminPass) {
+  const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_callings_pending', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass }),
+  });
+  if (res.getResponseCode() === 404) return 0;  // edits.sql not run yet
+  if (res.getResponseCode() >= 300) throw new Error('admin_callings_pending ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 120));
+  const pending = JSON.parse(res.getContentText() || '[]');
+  if (!pending.length) return 0;
+  const asOf = new Date().toISOString();
+
+  const cfg = MEMBER_SHEETS.filter(function (s) { return s.key === 'callings'; })[0];
+  const ss = SpreadsheetApp.openById(cfg.id);
+  const sheet = cfg.tab ? ss.getSheetByName(cfg.tab) : ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(function (h) { return String(h || '').trim(); });
+  const col = function (name) { const i = headers.indexOf(name); if (i < 0) throw new Error('column "' + name + '" not found on the sheet'); return i + 1; };
+  const nameCol = col('NAME');
+  const norm = function (s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z' -]/g, ' ').replace(/\s+/g, ' ').trim(); };
+  const rowOf = function (name) {
+    const exact = String(name).trim().toLowerCase(), loose = norm(name);
+    for (let r = 1; r < data.length; r++) if (String(data[r][nameCol - 1] || '').trim().toLowerCase() === exact) return r + 1;
+    for (let r = 1; r < data.length; r++) if (norm(data[r][nameCol - 1]) === loose && loose) return r + 1;
+    return 0;
+  };
+  const done = [];
+  pending.forEach(function (e) {
+    let row = rowOf(e.name);
+    if (!row) { row = sheet.getLastRow() + 1; sheet.getRange(row, nameCol).setValue(e.name); }
+    Object.keys(e.edits || {}).forEach(function (k) { sheet.getRange(row, col(k)).setValue(e.edits[k]); });
+    done.push(e.name);
+    Logger.log('sheet row %s ← %s: %s', row, e.name, JSON.stringify(e.edits));
+  });
+  SpreadsheetApp.flush();
+  const mark = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_callings_mark_synced', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass, p_names: done, p_as_of: asOf }),
+  });
+  if (mark.getResponseCode() >= 300) throw new Error('admin_callings_mark_synced ' + mark.getResponseCode());
+  return done.length;
 }
 
 // Web app entry point for the "Refresh from Google Sheets" button (see setup step 7).

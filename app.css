@@ -315,6 +315,17 @@ body.deck-open { overflow: hidden; }
 .slide-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
 .slide-card h3 { margin: 0 0 10px; font-family: var(--serif); font-size: 20px; font-weight: 600; }
 .slide-card h3 .muted { font-family: var(--font); font-size: 14px; font-weight: 400; }
+/* editing the sheet columns on a slide */
+.slide-card.calling h3 { display: flex; align-items: center; gap: 10px; }
+.slide-card h3 .edit-btn { margin-left: auto; font-size: 12px; padding: 3px 10px; font-family: var(--font); font-weight: 400; }
+.edit-form { display: grid; gap: 8px; }
+.edit-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
+.edit-field { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; width: 100%; background: var(--card); color: var(--ink); }
+.edit-field:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(27,42,65,0.12); }
+textarea.edit-field { min-height: 70px; resize: vertical; }
+.edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.edit-actions .btn { width: auto; }
+@media (max-width: 640px) { .edit-row { grid-template-columns: 1fr; gap: 2px; } }
 .note-line { background: #fdf3df; border: 1px solid #f1dfae; color: #6b4e0b; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 17px; }
 .facts { margin: 0; display: grid; gap: 8px; }
 .fact { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: baseline; }

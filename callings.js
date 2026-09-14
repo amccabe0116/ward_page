@@ -23,6 +23,7 @@ window.NPCallings = (function () {
   let view = [];             // people after filter + search
   let attendance = new Map();// member_id -> Map(date -> Set(class))
   let sundays = [];          // last N Sundays, oldest → newest (YYYY-MM-DD)
+  let edits = [];            // rows from callings_edits (site-side edits waiting for / written to the sheet)
   let filter = 'all', query = '', deckAt = -1, loaded = false, loading = null;
 
   // ---------- helpers ----------
@@ -135,11 +136,18 @@ window.NPCallings = (function () {
       if (member) { const [last, restName] = String(member.name).split(/,\s*/); return forms.get(norm(restName).split(' ')[0] + '|' + norm(last)) || null; }
       return null;
     };
+    const sheetAt = cs.updated_at ? new Date(cs.updated_at) : new Date(0);
+    const editByName = new Map(edits.map(e => [norm(e.name), e])), editByUuid = new Map(edits.filter(e => e.lcr_uuid).map(e => [e.lcr_uuid, e]));
     const mk = (name, sr, lcr, member, variants) => {
-      const o = sr ? sr.o : {};
-      const notes = o['Other Notes'] || '';
+      const o = Object.assign({}, sr ? sr.o : {});
       const tag = sr ? sr.tag : '';
-      return { name, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr,
+      const sheetName = sr ? sr.rawName : name;
+      // site-side edits win over the sheet copy until the Apps Script has written them into the sheet
+      const ed = (lcr && editByUuid.get(lcr['Person UUID'])) || (member && editByUuid.get(member.lcr_uuid)) || editByName.get(norm(sheetName)) || editByName.get(norm(name));
+      const pending = !!(ed && (!ed.synced_at || new Date(ed.updated_at) > sheetAt));
+      if (pending) Object.assign(o, ed.edits);
+      const notes = o['Other Notes'] || '';
+      return { name, sheetName, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr, pending, editedAt: ed ? ed.updated_at : null,
         flagged: /warning|warming|move|check|magnet|aged out|unresponsive|declin|hold/i.test(notes) || /moved|aged out|moving/i.test(tag),
         proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
         texted: o['texted'] || '', answer: o['answer'] || '', sustained: o['sustained'] || '' };
@@ -212,7 +220,8 @@ window.NPCallings = (function () {
     }
     const cs = sheets.callings;
     const ls = sheets.lcr_callings, when = d => new Date(d).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    $('cal-meta').textContent = ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '');
+    const nPending = people.filter(p => p.pending).length;
+    $('cal-meta').textContent = (ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '')) + (nPending ? ` · ${nPending} edit${nPending === 1 ? '' : 's'} waiting to go to the sheet` : '');
     if (!view.length) { box.appendChild(el('p', { class: 'empty' }, people.length ? 'Nobody matches.' : 'No sheet data yet — run supabase/sheets.sql, then refresh the sheets.')); return; }
     const t = el('table', { class: 'grid cal-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, ''), el('th', {}, 'Calling'), el('th', {}, 'Status'), el('th', {}, 'Last 4'), el('th', {}, 'Form')])));
     const tb = el('tbody');
@@ -220,7 +229,7 @@ window.NPCallings = (function () {
       const st = status(p);
       const latest = p.forms[0];
       tb.appendChild(el('tr', { class: 'cal-row', tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
-        el('td', {}, [el('b', {}, p.name), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, p.tag ? el('span', { class: 'pill off' }, p.tag) : null]),
+        el('td', {}, [el('b', {}, p.name), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, p.tag ? el('span', { class: 'pill off' }, p.tag) : null, p.pending ? el('span', { class: 'pill wait', title: 'Edited here; written to the Google Sheet on the next sync' }, '✎') : null]),
         el('td', { class: 'muted' }, p.lcr ? [p.lcr.Age, p.lcr['Address - City']].filter(truthy).join(' · ') : [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
         el('td', {}, p.proposed ? [p.proposed, p.assignment ? el('span', { class: 'muted' }, ' · ' + p.assignment + ' to text') : null] : (p.notes ? el('span', { class: 'muted' }, p.notes) : '')),
         el('td', {}, el('span', { class: 'pill ' + st.k }, st.t)),
@@ -277,11 +286,12 @@ window.NPCallings = (function () {
         p.member ? (p.member.active ? null : el('span', { class: 'pill warn' }, 'Records have moved out')) : el('span', { class: 'pill warn' }, 'Not in LCR any more'),
       ]),
     ]);
-    const calling = el('section', { class: 'slide-card' }, [
-      el('h3', {}, 'Calling'),
+    const calling = el('section', { class: 'slide-card calling' }, [
+      el('h3', {}, ['Calling', el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit')]),
       truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', p.texted], ['Answer', p.answer], ['Sustained', p.sustained]]),
-      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — add a row for them.') : null,
+      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
+      p.pending ? el('p', { class: 'muted small' }, 'Edited here · goes into the Google Sheet on the next sync') : null,
     ]);
     const tr = truthy(L['Temple Recommend Status']) ? L['Temple Recommend Status'] + (truthy(L['Temple Recommend Type']) ? ' · ' + (/proxy/i.test(L['Temple Recommend Type']) ? 'limited-use' : L['Temple Recommend Type'].toLowerCase()) : '') : (p.lcr ? 'None' : '');
     const aboutPairs = [['Temple recommend', tr], ['Ministering brothers', L['Ministering Brothers']], ['Ministering sisters', L['Ministering Sisters']], ['Has children', yes(L['Has Children']) ? 'Yes' : ''],
@@ -322,6 +332,40 @@ window.NPCallings = (function () {
     ]);
     return el('div', { class: 'slide' }, [head, el('div', { class: 'slide-grid' }, [el('div', { class: 'slide-col' }, [calling, about, attCard]), el('div', { class: 'slide-col' }, formCard)])]);
   }
+  // ---------- editing the sheet columns ----------
+  const EDIT_COLS = [['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'input'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'input'], ['Other Notes', 'Other notes', 'textarea']];
+  function editCalling(p, card) {
+    const fields = EDIT_COLS.map(([key, label, kind]) => {
+      const input = el(kind, { class: 'edit-field', 'data-key': key, placeholder: label });
+      input.value = p.o[key] || '';
+      return el('label', { class: 'edit-row' }, [el('span', {}, label), input]);
+    });
+    const msg = el('span', { class: 'muted' });
+    const form = el('form', { class: 'edit-form', onsubmit: async e => {
+      e.preventDefault();
+      const values = {}; let changed = false;
+      for (const f of form.querySelectorAll('.edit-field')) { const v = f.value.trim(); if (v !== (p.o[f.dataset.key] || '')) { values[f.dataset.key] = v; changed = true; } }
+      if (!changed) { cancel(); return; }
+      msg.textContent = 'Saving…';
+      try {
+        await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || (p.member && p.member.lcr_uuid) || null, p_values: values, p_by: null });
+        edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
+        const keep = p.sheetName;
+        build(); applyFilter();
+        const at = view.findIndex(x => x.sheetName === keep);
+        if (at >= 0) deckAt = at; else { filter = 'all'; applyFilter(); deckAt = Math.max(0, view.findIndex(x => x.sheetName === keep)); }
+        renderList(); renderDeck(); toast('Saved — it goes into the Google Sheet on the next sync');
+      } catch (err) { msg.textContent = /admin_callings_edit/.test(err.message) ? 'Run supabase/edits.sql in Supabase first.' : 'Not saved: ' + err.message; }
+    } }, [
+      ...fields,
+      el('div', { class: 'edit-actions' }, [el('button', { class: 'btn small', type: 'submit' }, 'Save'), el('button', { class: 'btn small secondary', type: 'button', onclick: () => cancel() }, 'Cancel'), msg]),
+    ]);
+    const prev = [...card.childNodes];
+    function cancel() { card.innerHTML = ''; prev.forEach(n => card.appendChild(n)); }
+    card.innerHTML = ''; card.appendChild(el('h3', {}, 'Calling')); card.appendChild(form);
+    form.querySelector('.edit-field').focus();
+  }
+
   function renderDeck() {
     const p = view[deckAt]; if (!p) return;
     $('deck-pos').textContent = `${deckAt + 1} of ${view.length}`;
@@ -350,6 +394,7 @@ window.NPCallings = (function () {
       try { rows = await rpc('admin_sheets', { p_pass: pass }); }
       catch (e) { $('cal-list').innerHTML = ''; $('cal-list').appendChild(el('p', { class: 'notice' }, 'Run supabase/sheets.sql in Supabase first (' + e.message + ').')); loading = null; return; }
       sheets = Object.fromEntries(rows.map(r => [r.key, r]));
+      try { edits = await rpc('admin_callings_edits', { p_pass: pass }); } catch (e) { edits = []; }
       attendance = new Map();
       try {
         for (const r of await rpc('admin_attendance_recent', { p_pass: pass, p_weeks: 8 })) {
