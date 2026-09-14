@@ -402,6 +402,9 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .muted { color: var(--muted); font-size: 13px; }
 .footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px; }
 .footer a { color: var(--muted); }
+.footer-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.footer-row span { flex: 1; text-align: center; }
+.footer-row a { white-space: nowrap; }
 
 @media (min-width: 640px) {
   .choices { grid-template-columns: 1fr 1fr; }
