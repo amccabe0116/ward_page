@@ -61,7 +61,9 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    push failed), or on `syncMemberSheets`' next run (adding a row for anyone not on the sheet
    yet, deleting rows marked for deletion). Only the edited columns are
    written, a blank never overwrites a filled cell, and a field someone emptied on the site is
-   stored as `null` so that clear does go through. Everything else is still edited in the sheet. **Flag** is its own sheet column (Warning = may be sent
+   stored as `null` so that clear does go through. Everything else is still edited in the sheet. *Remove* on a slide deletes the
+   person's sheet row and keeps them hidden (`callings_edits.deleted`) until LCR stops listing
+   them; the *Removed* filter undoes it. **Flag** is its own sheet column (Warning = may be sent
    back to their home ward if they don't attend; Magnet = being sent back, no new-member
    meeting) — `supabase/flags.sql`. It is the only source of a flag: Other Notes is plain text and
    is never read for meaning. *Send the warning / magnet message* on a slide texts (SimpleTexting) and emails
