@@ -1,9 +1,12 @@
 /*
  * Leaders › Callings — the "members without callings" meeting tool.
  *
- * Reads the two leadership Google Sheets mirrored into the database (supabase/sheets.sql):
- *   callings   – the "Members without Callings" doc (one row per person, meeting notes)
- *   newmember  – the "New Member Form" responses (how each person moved into the ward)
+ * Reads what is mirrored into the database (supabase/sheets.sql):
+ *   lcr_callings – LCR's "Members without Callings" custom report: the base list (who is without
+ *                  a calling right now, with age, city, phone, email, recommend, RM, move-in date)
+ *   callings     – the leaders' "Members without Callings" Google Sheet: the NOTES (proposed
+ *                  calling, who texts, answer, sustained, warnings…), attached to each LCR person
+ *   newmember    – the "New Member Form" responses (how each person moved into the ward)
  * matches each person to the LCR roll (for attendance), and shows it two ways:
  *   • a list you can filter/search and click into
  *   • a meeting deck: one person per slide, ← → to move through everyone
@@ -110,6 +113,8 @@ window.NPCallings = (function () {
       for (const list of forms.values()) list.sort((a, b) => (b.when || 0) - (a.when || 0));
     }
 
+    // the leaders' sheet rows (notes), keyed so they can be attached to LCR people by name
+    const sheetRows = [];
     let section = '';
     cs.rows.forEach((row, i) => {
       const o = rowObj(cs, row);
@@ -118,22 +123,51 @@ window.NPCallings = (function () {
       const rest = row.slice(1).some(truthy);
       if (!rest && /^new additions/i.test(rawName)) { section = rawName.replace(/^new additions\s*(since)?\s*/i, 'New since '); return; }
       if (!rest && rawName === rawName.toUpperCase() && rawName.length > 12) { section = rawName; return; }
-      const name = rawName.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-      const tag = (rawName.match(/\((.*?)\)/) || [])[1] || '';
-      const variants = splits(rawName);
-      const member = idx.findMember(variants);
-      let form = null;
-      for (const [f, l] of variants) { if (forms.has(f + '|' + l)) { form = forms.get(f + '|' + l); break; } }
-      if (!form && member) { // fall back to the LCR name in case the callings sheet spells it differently
-        const [last, restName] = String(member.name).split(/,\s*/);
-        form = forms.get(norm(restName).split(' ')[0] + '|' + norm(last)) || null;
-      }
-      const notes = o['Other Notes'] || '';
-      const flagged = /warning|warming|move|check|magnet|aged out|unresponsive|declin|hold/i.test(notes) || /moved|aged out|moving/i.test(tag);
-      people.push({ i, name, tag, section, o, member, forms: form || [], notes, flagged,
-        proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
-        texted: o['texted'] || '', answer: o['answer'] || '', sustained: o['sustained'] || '' });
+      sheetRows.push({ i, rawName, name: rawName.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim(), tag: (rawName.match(/\((.*?)\)/) || [])[1] || '', section, o, variants: splits(rawName), used: false });
     });
+    const findSheetRow = (variants) => {
+      for (const [f, l] of variants) { const hit = sheetRows.find(r => !r.used && r.variants.some(([f2, l2]) => f2 === f && l2 === l)); if (hit) return hit; }
+      for (const [f, l] of variants) { const hits = sheetRows.filter(r => !r.used && r.variants.some(([f2, l2]) => l2 === l && (f2.startsWith(f.slice(0, 3)) || f.startsWith(f2.slice(0, 3)) || lev(f2, f) <= 2))); if (hits.length === 1) return hits[0]; }
+      return null;
+    };
+    const findForm = (variants, member) => {
+      for (const [f, l] of variants) { if (forms.has(f + '|' + l)) return forms.get(f + '|' + l); }
+      if (member) { const [last, restName] = String(member.name).split(/,\s*/); return forms.get(norm(restName).split(' ')[0] + '|' + norm(last)) || null; }
+      return null;
+    };
+    const mk = (name, sr, lcr, member, variants) => {
+      const o = sr ? sr.o : {};
+      const notes = o['Other Notes'] || '';
+      const tag = sr ? sr.tag : '';
+      return { name, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr,
+        flagged: /warning|warming|move|check|magnet|aged out|unresponsive|declin|hold/i.test(notes) || /moved|aged out|moving/i.test(tag),
+        proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
+        texted: o['texted'] || '', answer: o['answer'] || '', sustained: o['sustained'] || '' };
+    };
+
+    const ls = sheets.lcr_callings;
+    if (ls && ls.rows.length) {
+      // LCR's report is the truth for WHO is without a calling; the sheet supplies the notes.
+      const byUuid = new Map(members.map(m => [m.lcr_uuid, m]));
+      for (const row of ls.rows) {
+        const l = rowObj(ls, row);
+        const lcrName = l['Preferred Name'] || ''; if (!truthy(lcrName)) continue;
+        const [last, rest] = lcrName.split(/,\s*/);
+        const name = ((rest || '').split(' ')[0] + ' ' + (last || '')).trim();
+        const variants = [[norm(rest).split(' ')[0], norm(last)], ...norm(last).split(' ').filter(w => w.length > 2).map(w => [norm(rest).split(' ')[0], w])];
+        const member = byUuid.get(l['Person UUID']) || idx.findMember(variants);
+        const sr = findSheetRow(variants); if (sr) sr.used = true;
+        people.push(mk(name, sr, l, member, variants));
+      }
+      // people still on the sheet but no longer on LCR's report (got a calling, or moved)
+      for (const sr of sheetRows) {
+        if (sr.used) continue;
+        const member = idx.findMember(sr.variants);
+        const p = mk(sr.name, sr, null, member, sr.variants); p.sheetOnly = true; people.push(p);
+      }
+    } else {
+      for (const sr of sheetRows) { const member = idx.findMember(sr.variants); people.push(mk(sr.name, sr, null, member, sr.variants)); }
+    }
   }
 
   function status(p) {
@@ -146,11 +180,12 @@ window.NPCallings = (function () {
     return { k: 'off', t: 'Nothing yet' };
   }
   const FILTERS = {
-    all: { label: 'Everyone', test: () => true },
-    none: { label: 'Nothing proposed', test: p => !truthy(p.proposed) && !truthy(p.assignment) && !p.flagged },
-    waiting: { label: 'Proposed, waiting', test: p => (truthy(p.proposed) || truthy(p.assignment)) && !truthy(p.sustained) && !/accept/i.test(p.answer) },
-    flagged: { label: 'Flagged', test: p => p.flagged },
-    new: { label: 'New additions', test: p => !!p.section },
+    all: { label: 'Everyone', test: p => !p.sheetOnly },
+    none: { label: 'Nothing proposed', test: p => !p.sheetOnly && !truthy(p.proposed) && !truthy(p.assignment) && !p.flagged },
+    waiting: { label: 'Proposed, waiting', test: p => !p.sheetOnly && (truthy(p.proposed) || truthy(p.assignment)) && !truthy(p.sustained) && !/accept/i.test(p.answer) },
+    flagged: { label: 'Flagged', test: p => !p.sheetOnly && p.flagged },
+    new: { label: 'New / not on sheet', test: p => !p.sheetOnly && (!!p.section || !p.onSheet) },
+    sheetOnly: { label: 'On sheet, not in LCR report', test: p => !!p.sheetOnly },
   };
 
   function attFor(p) {
@@ -176,7 +211,8 @@ window.NPCallings = (function () {
       chips.appendChild(el('button', { class: 'chip' + (filter === k ? ' on' : ''), onclick: () => { filter = k; renderList(); } }, `${f.label} · ${n}`));
     }
     const cs = sheets.callings;
-    $('cal-meta').textContent = cs ? `${people.length} people · sheets updated ${new Date(cs.updated_at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : '';
+    const ls = sheets.lcr_callings, when = d => new Date(d).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    $('cal-meta').textContent = ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '');
     if (!view.length) { box.appendChild(el('p', { class: 'empty' }, people.length ? 'Nobody matches.' : 'No sheet data yet — run supabase/sheets.sql, then refresh the sheets.')); return; }
     const t = el('table', { class: 'grid cal-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, ''), el('th', {}, 'Calling'), el('th', {}, 'Status'), el('th', {}, 'Last 4'), el('th', {}, 'Form')])));
     const tb = el('tbody');
@@ -184,8 +220,8 @@ window.NPCallings = (function () {
       const st = status(p);
       const latest = p.forms[0];
       tb.appendChild(el('tr', { class: 'cal-row', tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
-        el('td', {}, [el('b', {}, p.name), p.section ? el('span', { class: 'pill new' }, 'new') : null, p.tag ? el('span', { class: 'pill off' }, p.tag) : null]),
-        el('td', { class: 'muted' }, [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
+        el('td', {}, [el('b', {}, p.name), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, p.tag ? el('span', { class: 'pill off' }, p.tag) : null]),
+        el('td', { class: 'muted' }, p.lcr ? [p.lcr.Age, p.lcr['Address - City']].filter(truthy).join(' · ') : [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
         el('td', {}, p.proposed ? [p.proposed, p.assignment ? el('span', { class: 'muted' }, ' · ' + p.assignment + ' to text') : null] : (p.notes ? el('span', { class: 'muted' }, p.notes) : '')),
         el('td', {}, el('span', { class: 'pill ' + st.k }, st.t)),
         el('td', {}, p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR')),
@@ -221,13 +257,21 @@ window.NPCallings = (function () {
   }
   function slide(p) {
     const st = status(p);
-    const o = p.o;
+    const o = p.o, L = p.lcr || {};
+    const age = L.Age || o.AGE, city = L['Address - City'] ? L['Address - City'].replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()) : o.LOCATION;
     const head = el('div', { class: 'slide-head' }, [
       el('h1', {}, p.name),
-      el('p', { class: 'slide-sub' }, [o.AGE ? o.AGE : null, o.LOCATION, yes(o.CAR) ? 'has a car' : (truthy(o.CAR) && /^n/i.test(o.CAR) ? 'no car' : null), truthy(o['LENGTH OF STAY']) ? 'here ' + o['LENGTH OF STAY'].replace(/^(for|until|till|thru|through)\s+/i, m => m.toLowerCase()) : null].filter(Boolean).join('  ·  ')),
+      el('p', { class: 'slide-sub' }, [age ? age : null, city, truthy(L['Move In Date']) ? 'moved in ' + L['Move In Date'] : null, yes(L['Is Returned Missionary']) ? 'returned missionary' : null, yes(o.CAR) ? 'has a car' : (truthy(o.CAR) && /^n/i.test(o.CAR) ? 'no car' : null), truthy(o['LENGTH OF STAY']) ? 'here ' + o['LENGTH OF STAY'].replace(/^(for|until|till|thru|through)\s+/i, m => m.toLowerCase()) : null].filter(Boolean).join('  ·  ')),
+      (truthy(L['Individual Phone']) || truthy(L['Individual E-mail'])) ? el('p', { class: 'slide-contact' }, [
+        truthy(L['Individual Phone']) ? el('a', { href: 'tel:' + L['Individual Phone'].replace(/\D/g, '') }, L['Individual Phone']) : null,
+        truthy(L['Individual Phone']) && truthy(L['Individual E-mail']) ? '  ·  ' : null,
+        truthy(L['Individual E-mail']) ? el('a', { href: 'mailto:' + L['Individual E-mail'] }, L['Individual E-mail']) : null,
+      ]) : null,
       el('div', { class: 'badges' }, [
         el('span', { class: 'pill ' + st.k }, st.t),
         p.section ? el('span', { class: 'pill new' }, p.section) : null,
+        (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'Not on the sheet yet') : null,
+        p.sheetOnly ? el('span', { class: 'pill warn' }, 'Not on LCR\'s no-calling report any more') : null,
         truthy(o['RECENT CONVERT (under yr)']) ? el('span', { class: 'pill recommend' }, 'Recent convert ' + (o['RECENT CONVERT (under yr)'].replace(/^yes\s*-?\s*/i, '').trim())) : null,
         p.tag ? el('span', { class: 'pill off' }, p.tag) : null,
         p.member ? (p.member.active ? null : el('span', { class: 'pill warn' }, 'Records have moved out')) : el('span', { class: 'pill warn' }, 'Not in LCR any more'),
@@ -237,12 +281,15 @@ window.NPCallings = (function () {
       el('h3', {}, 'Calling'),
       truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', p.texted], ['Answer', p.answer], ['Sustained', p.sustained]]),
-      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, 'Nothing proposed yet.') : null,
+      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — add a row for them.') : null,
     ]);
+    const tr = truthy(L['Temple Recommend Status']) ? L['Temple Recommend Status'] + (truthy(L['Temple Recommend Type']) ? ' · ' + (/proxy/i.test(L['Temple Recommend Type']) ? 'limited-use' : L['Temple Recommend Type'].toLowerCase()) : '') : (p.lcr ? 'None' : '');
+    const aboutPairs = [['Temple recommend', tr], ['Ministering brothers', L['Ministering Brothers']], ['Ministering sisters', L['Ministering Sisters']], ['Has children', yes(L['Has Children']) ? 'Yes' : ''],
+      ['Why in Atlanta', o['PURPOSE IN ATL']], ['Mission', o.MISSION], ['Hobbies', o.HOBBIES], ['Music', o.MUSIC]];
     const about = el('section', { class: 'slide-card' }, [
       el('h3', {}, 'About'),
-      dl([['Why in Atlanta', o['PURPOSE IN ATL']], ['Mission', o.MISSION], ['Hobbies', o.HOBBIES], ['Music', o.MUSIC]]),
-      (!truthy(o['PURPOSE IN ATL']) && !truthy(o.MISSION) && !truthy(o.HOBBIES) && !truthy(o.MUSIC)) ? el('p', { class: 'muted' }, 'Nothing on the sheet yet.') : null,
+      dl(aboutPairs),
+      aboutPairs.every(([, v]) => !truthy(v)) ? el('p', { class: 'muted' }, 'Nothing on the sheet yet.') : null,
     ]);
     const f = p.forms[0];
     let formCard;

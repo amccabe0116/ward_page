@@ -306,6 +306,8 @@ body.deck-open { overflow: hidden; }
 .slide { max-width: 1240px; margin: 0 auto; }
 .slide-head h1 { font-family: var(--serif); font-size: clamp(30px, 4.6vw, 52px); margin: 0; line-height: 1.05; letter-spacing: -0.01em; }
 .slide-sub { font-size: clamp(16px, 1.6vw, 21px); color: var(--muted); margin: 8px 0 10px; }
+.slide-contact { font-size: 16px; margin: -4px 0 10px; }
+.slide-contact a { color: var(--navy); }
 .badges { display: flex; gap: 8px; flex-wrap: wrap; }
 .badges .pill { font-size: 14px; padding: 5px 12px; }
 .slide-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-top: 22px; align-items: start; }

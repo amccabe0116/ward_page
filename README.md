@@ -14,6 +14,7 @@ announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
 supabase/schema.sql database (tables, RLS, RPC functions) — paste into the SQL editor once
 scripts/lcr-sync.js runs inside a signed-in LCR tab: roster → Supabase, check-ins → LCR
+scripts/lcr-report.js             runs inside a signed-in LCR tab: a custom report (members without callings) → site
 scripts/announcements.gs          Google Apps Script: announcements email → repo, every Sunday night
 scripts/publish_announcements.py  same thing from a raw .eml, for manual use
 supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
@@ -40,11 +41,14 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    from the page and clicks the attendance buttons for everyone who checked in on the site.
    Rows show as *synced* on the admin page once LCR has them. Guests stay on the site only —
    LCR's Visitors tab takes men/women totals, and the ward chose not to send those.
-4. **Leaders › Callings.** The "Members without Callings" Google Sheet and the "New Member
-   Form" responses are copied into the database (`sheets` table) by `syncMemberSheets` in
+4. **Leaders › Callings.** Three sources meet here: LCR's *Members without Callings* custom
+   report (the base list — copied in by `scripts/lcr-report.js` from a signed-in LCR tab, with
+   the Sunday sync), the leaders' "Members without Callings" Google Sheet (the notes: proposed
+   calling, who texts, answer, sustained, warnings), and the "New Member Form" responses. The
+   two Google Sheets are copied into the database (`sheets` table) by `syncMemberSheets` in
    `scripts/announcements.gs` every 6 hours (or on demand with the Refresh button once the
-   script is deployed as a web app — `sheetsRefreshUrl` in `config.js`). `callings.js` matches
-   each person on the callings sheet to their form response and to the LCR roll, and shows the
+   script is deployed as a web app — `sheetsRefreshUrl` in `config.js`). `callings.js` attaches
+   each person's sheet notes, form response and roll check-ins to the LCR row, and shows the
    list plus a meeting deck (one person per slide, ← → to move) for handing out assignments.
    Read-only: edits still happen in the Google Sheet.
 

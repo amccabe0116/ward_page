@@ -8,6 +8,9 @@
  *   'pending' { week }             -> { ok, week, pending:[{id,u,cu,name,class}], counts }
  *                                     (site check-ins not yet in LCR, with the LCR class to mark)
  *   'mark'    { ids:[…] }          -> { ok, marked }
+ *   'sheet'   { key, title, sourceUrl, headers, rows } -> { ok, stored }
+ *                                     (store a table for Leaders › Callings — e.g. the output of
+ *                                      scripts/lcr-report.js, key 'lcr_callings')
  *   'roster'  { classes, members, deactivateMissing } -> { ok, inserted, updated, deactivated }
  *                                     (classes/members exactly as lcr-sync.js 'roster' returned;
  *                                      pass deactivateMissing:false when sending a partial slice)
@@ -16,6 +19,7 @@
 (async function npDbSync(userCfg) {
   const cfg = Object.assign({
     supabaseUrl: '', anonKey: '', pass: '', action: 'status', week: null, ids: [], classes: [], members: [],
+    key: null, title: null, sourceUrl: null, headers: null, rows: null,
     deactivateMissing: true,
     ssOrgTypeIds: [1255, 1256, 1257], prsOrgTypeIds: [70, 71, 74],
   }, userCfg || window.NP_DB || {});
@@ -63,6 +67,10 @@
     }
     if (cfg.action === 'mark') {
       out.marked = cfg.ids.length ? await rpc('admin_mark_synced', { p_pass: cfg.pass, p_attendance_ids: cfg.ids }) : 0;
+    }
+    if (cfg.action === 'sheet') {
+      if (!cfg.key || !Array.isArray(cfg.headers) || !Array.isArray(cfg.rows)) throw new Error('sheet needs key, headers, rows');
+      out.stored = await rpc('admin_replace_sheet', { p_pass: cfg.pass, p_key: cfg.key, p_title: cfg.title || cfg.key, p_source_url: cfg.sourceUrl || null, p_headers: cfg.headers, p_rows: cfg.rows, p_by: 'lcr-sync' });
     }
     if (cfg.action === 'roster') {
       const members = (cfg.members || []).map(m => {

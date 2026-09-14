@@ -42,6 +42,13 @@ Config: SUPABASE_URL=<url>, ANON_KEY=<publishable key>, PASS=<admin passphrase>.
    page as that member instead and remove the guest row.
 9. Report in one paragraph: week, pushed / already marked / no cell (with names from `pending`).
 
+Members-without-callings report — also every run (feeds Leaders › Callings):
+   LCR tab: navigate to https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/186530a9-e9f3-46ab-9981-df0e4789315e
+            wait for "Count: N" at the bottom, then run scripts/lcr-report.js
+            (window.NP_REPORT = { key: 'lcr_callings', title: 'LCR: Members without Callings' })
+   site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } with that result.
+   The leaders' Google Sheet (notes) refreshes separately via the Apps Script / "refresh the sheets".
+
 Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
    LCR tab: window.NP_SYNC = { mode: 'roster', week: <week>, from: 0, to: 140 } then { from: 140, to: 400 }
    site tab: collect both slices in a window variable, then ONE db-sync call
