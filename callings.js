@@ -52,8 +52,8 @@ window.NPCallings = (function () {
   function buildIndexes(members) {
     // LCR: "Last, First Middle" -> keys "first|last"
     const byKey = new Map(), byLast = new Map();
-    for (const m of members) {
-      if (!m.active) continue;
+    // active members first so they win over a same-name record that has left the ward
+    for (const m of [...members].sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))) {
       const [last, rest] = String(m.name).split(/,\s*/);
       const first = norm(rest).split(' ')[0], ln = norm(last);
       if (!first || !ln) continue;
@@ -188,7 +188,7 @@ window.NPCallings = (function () {
         el('td', { class: 'muted' }, [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
         el('td', {}, p.proposed ? [p.proposed, p.assignment ? el('span', { class: 'muted' }, ' · ' + p.assignment + ' to text') : null] : (p.notes ? el('span', { class: 'muted' }, p.notes) : '')),
         el('td', {}, el('span', { class: 'pill ' + st.k }, st.t)),
-        el('td', {}, p.member ? attDots(p, 4) : el('span', { class: 'muted', title: 'Not matched to a name on the LCR roll' }, 'no roll match')),
+        el('td', {}, p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR')),
         el('td', { class: 'muted' }, latest ? (latest.when ? fmtShort(latest.when) : 'yes') : '—'),
       ]));
     });
@@ -230,7 +230,7 @@ window.NPCallings = (function () {
         p.section ? el('span', { class: 'pill new' }, p.section) : null,
         truthy(o['RECENT CONVERT (under yr)']) ? el('span', { class: 'pill recommend' }, 'Recent convert ' + (o['RECENT CONVERT (under yr)'].replace(/^yes\s*-?\s*/i, '').trim())) : null,
         p.tag ? el('span', { class: 'pill off' }, p.tag) : null,
-        p.member ? null : el('span', { class: 'pill warn' }, 'Not on the LCR roll'),
+        p.member ? (p.member.active ? null : el('span', { class: 'pill warn' }, 'Records have moved out')) : el('span', { class: 'pill warn' }, 'Not in LCR any more'),
       ]),
     ]);
     const calling = el('section', { class: 'slide-card' }, [
@@ -266,12 +266,12 @@ window.NPCallings = (function () {
     const seen = a.filter(x => x.ss || x.prs);
     const attCard = el('section', { class: 'slide-card' }, [
       el('h3', {}, 'Attendance'),
-      p.member ? el('div', { class: 'att-row' }, a.map(x => el('div', { class: 'att-cell' }, [
+      p.member && p.member.active ? el('div', { class: 'att-row' }, a.map(x => el('div', { class: 'att-cell' }, [
         el('i', { class: 'dot' + (x.ss && x.prs ? ' both' : (x.ss || x.prs ? ' one' : '')) }),
         el('span', { class: 'att-lbl' }, x.d.slice(5).replace('-', '/')),
         el('span', { class: 'att-cls' }, [x.ss ? 'SS' : '', x.ss && x.prs ? ' · ' : '', x.prs ? 'P/RS' : ''].join('')),
-      ]))) : el('p', { class: 'muted' }, 'Not matched to a name on the LCR roll, so no check-ins to show.'),
-      p.member ? el('p', { class: 'muted' }, seen.length ? `Checked in ${seen.length} of the last ${a.length} Sundays · last seen ${fmtDate(seen[seen.length - 1].d, { weekday: undefined })}` : `No check-ins in the last ${a.length} Sundays (site roll started Sept 6).`) : null,
+      ]))) : el('p', { class: 'muted' }, p.member ? 'Their membership record has left the ward, so the roll no longer lists them.' : 'Not on the LCR roll any more, so there are no check-ins to show.'),
+      p.member && p.member.active ? el('p', { class: 'muted' }, seen.length ? `Checked in ${seen.length} of the last ${a.length} Sundays · last seen ${fmtDate(seen[seen.length - 1].d, { weekday: undefined })}` : `No check-ins in the last ${a.length} Sundays (site roll started Sept 6).`) : null,
     ]);
     return el('div', { class: 'slide' }, [head, el('div', { class: 'slide-grid' }, [el('div', { class: 'slide-col' }, [calling, about, attCard]), el('div', { class: 'slide-col' }, formCard)])]);
   }
