@@ -290,7 +290,7 @@ function sendFlagMessage_(b) {
   const phone = String(b.phone || '').replace(/\D/g, '');
   if (phone && b.sms) {
     const key = props.getProperty('SIMPLETEXTING_KEY');
-    if (!key) { res.sms = 'failed'; res.error = 'SIMPLETEXTING_KEY is not set in Script properties'; }
+    if (!key) { res.sms = 'skipped'; res.error = 'no SimpleTexting key yet (SIMPLETEXTING_KEY in Script properties)'; }
     else {
       const payload = { contactPhone: phone.length === 10 ? '1' + phone : phone, mode: 'AUTO', text: b.sms };
       const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
@@ -311,7 +311,8 @@ function sendFlagMessage_(b) {
       res.email = 'sent';
     } catch (e) { res.email = 'failed'; res.error = (res.error ? res.error + '; ' : '') + 'email: ' + (e && e.message); }
   }
-  res.ok = res.sms !== 'failed' && res.email !== 'failed' && (res.sms === 'sent' || res.email === 'sent');
+  // one channel getting through counts as sent; res.error then explains the other one
+  res.ok = res.sms === 'sent' || res.email === 'sent';
   if (!res.ok && !res.error) res.error = 'nothing to send (no phone/text or email/body)';
   return res;
 }

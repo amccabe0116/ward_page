@@ -520,13 +520,16 @@ window.NPCallings = (function () {
     try {
       const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass: ctx.getPass(), name: p.name, phone, email, flag: p.flag, sms, subject, body, fromName: t.notify_from_name || '', replyTo: t.notify_reply_to || '' }) });
       const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'send failed');
+      const sentSms = j.sms === 'sent', sentEmail = j.email === 'sent';
+      if (!sentSms && !sentEmail) throw new Error(j.error || 'send failed');  // one channel is enough to count as sent
       const today = todayMDY();
       await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: p.flag, 'Flag sent': today + (j.sms === 'sent' && j.email === 'sent' ? ' (text + email)' : j.sms === 'sent' ? ' (text)' : ' (email)') }, p_by: null });
       edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
       const keep = p.sheetName; build(); applyFilter(); const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; renderList(); renderDeck();
       saveToSheet(p, null, true);
-      toast(`Sent${j.sms === 'sent' ? ' text' : ''}${j.sms === 'sent' && j.email === 'sent' ? ' and' : ''}${j.email === 'sent' ? ' email' : ''} to ${p.name}`);
+      const what = sentSms && sentEmail ? 'Text and email sent' : sentSms ? 'Text sent' : 'Email sent';
+      const miss = !sentSms && phone ? ` · text not sent (${j.error || 'no SimpleTexting key yet'})` : !sentEmail && email ? ` · email not sent (${j.error || 'unknown'})` : '';
+      toast(`${what} to ${p.name}${miss}`, miss ? 7000 : 3500);
     } catch (e) { toast('Not sent: ' + e.message, 5000); }
   }
 
