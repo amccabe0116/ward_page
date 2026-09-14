@@ -285,7 +285,6 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .cal-grid td.flag-cell .small { font-size: 12px; margin-top: 2px; }
 .cal-grid td.flag-cell .pill.due { margin: 4px 0 0; }
 .due-text { color: var(--danger); font-weight: 600; }
-.pill.inferred { border: 1px dashed currentColor; background: transparent; }
 .row-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .row-pills .pill { margin-left: 0; font-size: 11px; padding: 1px 7px; }
 .cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -366,7 +365,7 @@ input.edit-check { width: 22px; height: 22px; accent-color: var(--navy); margin:
 .edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 .edit-actions .btn { width: auto; }
 @media (max-width: 640px) { .edit-row { grid-template-columns: 1fr; gap: 2px; } }
-.note-line { background: #fdf3df; border: 1px solid #f1dfae; color: #6b4e0b; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; font-size: 17px; }
+.note-line { margin: 0 0 12px; font-size: 17px; white-space: pre-wrap; }
 .facts { margin: 0; display: grid; gap: 8px; }
 .fact { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: baseline; }
 .fact dt { color: var(--muted); font-size: 14px; }

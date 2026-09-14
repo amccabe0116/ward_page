@@ -101,7 +101,7 @@
           <dl class="legend-list">
             <div><dt><span class="pill flag">Warning</span></dt><dd>Attending a YSA ward is optional — we're telling them that if they don't start showing up, their records go back to their home ward. <em>Send the warning message</em> on their slide texts/emails them and records the date.</dd></div>
             <div><dt><span class="pill magnet">Magnet</span></dt><dd>Their records came in without a new-member meeting, so they're being sent back to their previous ward. <em>Send the magnet message</em> does the same for this case.</dd></div>
-            <div><dt><span class="pill off">Move</span> <span class="pill off">Check</span> <span class="pill off">Hold</span> <span class="pill off">Aged out</span> <span class="pill off">Unreachable</span></dt><dd>Read from the Other Notes column: moving / moved, needs an RS or EQ check-in (or to meet the Bishop), on hold, aged out of YSA, or texts bounce / no response.</dd></div>
+            <div><dt><span class="pill off">Move</span> <span class="pill off">Aged out</span></dt><dd>From a note in parentheses after the name on the sheet, e.g. "Shane Woods (aged out)". Other Notes itself is just text — nothing is read out of it.</dd></div>
             <div><dt><span class="pill off">Nothing yet</span> <span class="pill wait">Proposed</span> <span class="pill wait">Texted</span> <span class="pill need">Answered / Declined</span> <span class="pill ok">Accepted / Sustained</span></dt><dd>Where the calling stands, from the Proposed / Who texts / Texted / Answer / Sustained columns.</dd></div>
             <div><dt><span class="pill new">new</span> <span class="pill new">not on sheet</span></dt><dd>In the sheet's NEW ADDITIONS section, or on LCR's report but with no row on the sheet yet (saving an edit adds the row).</dd></div>
             <div><dt><span class="pill warn">Not in LCR</span> <span class="pill ok">Has a calling?</span></dt><dd>On the sheet but not on LCR's no-calling report: either their records are gone (Not in LCR — delete the row) or they're still on the roll, so they probably received a calling. Both are in the <em>Not in LCR</em> filter.</dd></div>
@@ -213,7 +213,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=11"></script>
+  <script src="callings.js?v=12"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;

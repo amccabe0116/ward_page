@@ -149,24 +149,20 @@ window.NPCallings = (function () {
       const pending = !!(ed && (!ed.synced_at || new Date(ed.updated_at) > sheetAt));
       if (pending) for (const [k, v] of Object.entries(ed.edits || {})) o[k] = v == null ? '' : v;  // null = cleared on purpose
       const notes = o['Other Notes'] || '';
-      // Flag is its own column (Warning / Magnet). Older rows only have the word in Other Notes — infer it
-      // for display until a leader saves the real flag.
-      let flag = /^(warning|magnet)$/i.test(o.Flag || '') ? o.Flag.replace(/^\w/, c => c.toUpperCase()) : '', flagInferred = false;
-      if (!flag && /magnet/i.test(notes)) { flag = 'Magnet'; flagInferred = true; }
-      else if (!flag && /warn|warming/i.test(notes)) { flag = 'Warning'; flagInferred = true; }
+      // Flag is its own column (Warning / Magnet) — the only place it comes from. Other Notes is free text
+      // and is never read for meaning (a note like "removed from warning list" must not flag anyone).
+      const flag = /^(warning|magnet)$/i.test(o.Flag || '') ? o.Flag.replace(/^\w/, c => c.toUpperCase()) : '';
+      // tags come from the sheet's name suffix only, e.g. "Shane Woods (aged out)"
       const tags = [];
-      if (/\bmov(e|ed|ing)\b/i.test(notes) || /moved|moving/i.test(tag)) tags.push('Move');
-      if (/check|bishop meet/i.test(notes)) tags.push('Check');
-      if (/hold/i.test(notes)) tags.push('Hold');
-      if (/aged out/i.test(notes) || /aged out/i.test(tag)) tags.push('Aged out');
-      if (/unresponsive|undeliverable/i.test(notes)) tags.push('Unreachable');
+      if (/moved|moving/i.test(tag)) tags.push('Move');
+      if (/aged out/i.test(tag)) tags.push('Aged out');
       // when the warning / magnet message went out, and whether enough days have passed to move the records
       const sentM = String(o['Flag sent'] || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
       const sentAt = sentM ? new Date(+(sentM[3].length === 2 ? '20' + sentM[3] : sentM[3]), +sentM[1] - 1, +sentM[2]) : null;
       const sentDays = sentAt ? Math.floor((Date.now() - sentAt.getTime()) / 864e5) : null;
       const dueDays = flag ? dueDaysFor(flag) : null;
       return { name, sheetName, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr, pending, editedAt: ed ? ed.updated_at : null,
-        deleted: !!(ed && ed.deleted && pending), flag, flagInferred, flagSent: o['Flag sent'] || '', sentAt, sentDays, dueDays, due: !!(flag && sentDays !== null && sentDays >= dueDays), tags,
+        deleted: !!(ed && ed.deleted && pending), flag, flagSent: o['Flag sent'] || '', sentAt, sentDays, dueDays, due: !!(flag && sentDays !== null && sentDays >= dueDays), tags,
         flagged: !!flag || tags.length > 0,
         proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
         texted: o['texted'] || '', answer: o['answer'] || '', sustained: o['sustained'] || '' };
@@ -212,7 +208,7 @@ window.NPCallings = (function () {
     warning: { label: 'Warning', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Warning' },
     magnet: { label: 'Magnet', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Magnet' },
     due: { label: 'Ready to move out', test: p => !p.sheetOnly && !p.deleted && p.due },
-    other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && p.tags.length > 0 },
+    other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && truthy(p.notes) },
     new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (!!p.section || !p.onSheet) },
     sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly },
   };
@@ -227,7 +223,7 @@ window.NPCallings = (function () {
   }
   function flagPill(p, opts) {
     if (!p.flag) return null;
-    return el('span', { class: 'pill ' + FLAG_CLASS[p.flag] + (p.flagInferred ? ' inferred' : ''), title: p.flagInferred ? 'Found in Other Notes — open Edit to set the Flag column' : (p.flagSent ? 'Message sent ' + p.flagSent : '') }, p.flag + (opts && opts.long && p.flagSent ? ' · sent ' + p.flagSent : '') + (p.flagInferred && opts && opts.long ? ' (from notes)' : ''));
+    return el('span', { class: 'pill ' + FLAG_CLASS[p.flag], title: p.flagSent ? 'Message sent ' + p.flagSent : '' }, p.flag + (opts && opts.long && p.flagSent ? ' · sent ' + p.flagSent : ''));
   }
   function sheetOnlyPill(p) {
     if (!p.sheetOnly) return null;
@@ -259,8 +255,6 @@ window.NPCallings = (function () {
       const n = people.filter(f.test).length;
       chips.appendChild(el('button', { class: 'chip' + (filter === k ? ' on' : ''), onclick: () => { filter = k; renderList(); } }, `${f.label} · ${n}`));
     }
-    const nInferred = people.filter(p => p.flagInferred && !p.deleted).length;
-    if (nInferred) chips.appendChild(el('button', { class: 'chip convert', title: 'These still have the word in Other Notes; this sets the Flag column for all of them', onclick: convertAllFlags }, `Move ${nInferred} note${nInferred === 1 ? '' : 's'} → Flag column`));
     const cs = sheets.callings;
     const ls = sheets.lcr_callings, when = d => new Date(d).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     const nPending = people.filter(p => p.pending && !p.deleted).length, nDel = people.filter(p => p.deleted).length;
@@ -344,11 +338,11 @@ window.NPCallings = (function () {
     const calling = el('section', { class: 'slide-card calling' }, [
       el('h3', {}, ['Calling', el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit'),
         p.pending && !p.deleted && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName) ? el('button', { class: 'chip save-sheet-btn', type: 'button', title: 'Write this person\u2019s edits into the Google Sheet now', onclick: e => saveToSheet(p, e.currentTarget) }, 'Save to sheet') : null]),
-      truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
+      truthy(p.notes) ? el('p', { class: 'note-line' }, [el('span', { class: 'muted' }, 'Notes · '), p.notes]) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', /^\s*y(es)?\s*$/i.test(p.texted) ? '✓ Yes' : p.texted], ['Answer', p.answer], ['Sustained', /^\s*y(es)?\s*$/i.test(p.sustained) ? '✓ Yes' : p.sustained]]),
       (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
       p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
-        el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag], p.flagInferred ? el('span', { class: 'muted' }, ' (found in Other Notes — press Edit to set the Flag column)') : null]),
+        el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag]]),
         el('div', { class: 'flag-actions' }, [
           el('button', { class: 'chip', type: 'button', onclick: () => sendFlagMessage(p) }, (p.flagSent ? 'Send again' : 'Send the ' + p.flag.toLowerCase() + ' message') + (L['Individual Phone'] && L['Individual E-mail'] ? ' (text + email)' : L['Individual Phone'] ? ' (text)' : L['Individual E-mail'] ? ' (email)' : '')),
           p.flag ? el('span', { class: p.due ? 'due-text' : 'muted' }, p.due ? `Sent ${p.sentDays} days ago — past the ${p.dueDays}-day mark, ready to move their records` : (p.sentDays !== null ? `Sent ${p.sentDays === 0 ? 'today' : p.sentDays === 1 ? 'yesterday' : p.sentDays + ' days ago'} · move records after ${p.dueDays} days` : (truthy(p.flagSent) ? 'Sent ' + p.flagSent : `Not sent yet · records move ${p.dueDays} days after sending`))) : null,
@@ -441,8 +435,6 @@ window.NPCallings = (function () {
           set(f.dataset.key, f.checked ? (isTicked(orig) ? orig : f.dataset.kind === 'datecheck' ? todayMDY() : 'Y') : '');
         } else if (f.value.trim() !== orig) set(f.dataset.key, f.value.trim());
       }
-      if (p.flagInferred && !('Flag' in values)) { values.Flag = p.flag; changed = true; }  // make the inferred flag real
-      if (p.flagInferred && values.Flag === p.flag && !('Other Notes' in values)) { const n = stripFlagWords(p.notes); if (n !== p.notes) set('Other Notes', n); }
       if (!changed) { cancel(); return; }
       msg.textContent = 'Saving…';
       try {
@@ -464,26 +456,6 @@ window.NPCallings = (function () {
     function cancel() { card.innerHTML = ''; prev.forEach(n => card.appendChild(n)); }
     card.innerHTML = ''; card.appendChild(el('h3', {}, 'Calling')); card.appendChild(form);
     form.querySelector('.edit-field').focus();
-  }
-
-  // "Warning / Move" -> "Move"; "Magnet" -> ""; the word moves into the Flag column
-  function stripFlagWords(notes) {
-    return String(notes || '').replace(/\b(warning|warming|magnet)\b/gi, '').replace(/\(\s*\)/g, '').replace(/\s*[\/,;|]\s*(?=[\/,;|]|$)/g, '').replace(/^\s*[\/,;|]\s*/, '').replace(/\s+/g, ' ').trim().replace(/^\((.*)\)$/, '$1').trim();
-  }
-  async function convertAllFlags() {
-    const todo = people.filter(p => p.flagInferred && !p.deleted);
-    if (!todo.length) { toast('Nothing to convert'); return; }
-    if (!(await ask(`Move the word Warning / Magnet out of Other Notes and into the Flag column for ${todo.length} people? (Written to the sheet on the next sync.)`))) return;
-    let n = 0;
-    try {
-      for (const p of todo) {
-        // an emptied notes cell is an explicit clear (null) — a blank string would never overwrite the sheet
-        const values = { Flag: p.flag }; const stripped = stripFlagWords(p.notes); if (stripped !== p.notes) values['Other Notes'] = stripped || null;
-        await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || (p.member && p.member.lcr_uuid) || null, p_values: values, p_by: null }); n++;
-      }
-    } catch (e) { toast('Stopped after ' + n + ': ' + e.message, 5000); }
-    edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() }); build(); renderList();
-    if (n) toast(`${n} flag${n === 1 ? '' : 's'} set — they go into the sheet on the next sync`);
   }
 
   async function setDeleted(p, del) {
