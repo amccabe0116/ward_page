@@ -57,9 +57,13 @@ window.NPCallings = (function () {
       const [last, rest] = String(m.name).split(/,\s*/);
       const first = norm(rest).split(' ')[0], ln = norm(last);
       if (!first || !ln) continue;
-      byKey.set(first + '|' + ln, m);
-      if (!byLast.has(ln)) byLast.set(ln, []);
-      byLast.get(ln).push({ first, m });
+      // multi-word last names ("Orozco Lopez", "Figueroa Duarte") are also findable by either word
+      const lasts = new Set([ln, ...ln.split(' ').filter(w => w.length > 2)]);
+      for (const l of lasts) {
+        if (!byKey.has(first + '|' + l)) byKey.set(first + '|' + l, m);
+        if (!byLast.has(l)) byLast.set(l, []);
+        byLast.get(l).push({ first, m });
+      }
     }
     function findMember(nameVariants) {
       for (const [first, last] of nameVariants) {
