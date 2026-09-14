@@ -315,8 +315,8 @@ textarea.tpl.tall { min-height: 200px; }
 /* Leaders › Callings */
 .cal-top { flex-wrap: wrap; }
 .cal-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 13px; margin-top: 14px; }
-.cal-grid .cal-row { cursor: pointer; }
-.cal-grid .cal-row:hover td, .cal-grid .cal-row:focus td { background: #f7f4ec; }
+.cal-grid .cal-row, .ov-table .cal-row { cursor: pointer; }
+.cal-grid .cal-row:hover td, .cal-grid .cal-row:focus td, .ov-table .cal-row:hover td { background: #f7f4ec; }
 .cal-grid td .pill { margin-left: 6px; }
 .cal-grid .pill { white-space: nowrap; }
 .att-dots { display: inline-flex; gap: 4px; align-items: center; }
@@ -406,3 +406,22 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
   .choices { grid-template-columns: 1fr 1fr; }
   .hero h1 { font-size: 40px; }
 }
+
+/* Leaders › Overview */
+.stat .stat-sub { font-size: 12px; color: var(--muted); }
+.ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+.ov-card h3 { margin: 0 0 10px; font-family: var(--serif); font-size: 19px; font-weight: 600; }
+.ov-wide { grid-column: 1 / -1; }
+.ov-bars { display: grid; gap: 8px; }
+.ov-bar { display: grid; grid-template-columns: 56px 1fr 40px; align-items: center; gap: 10px; font-size: 15px; }
+.ov-bar-label { color: var(--muted); font-size: 13px; }
+.ov-bar-track { display: block; height: 14px; background: #efeae0; border-radius: 7px; overflow: hidden; }
+.ov-bar-fill { display: block; height: 100%; background: var(--navy); border-radius: 7px; }
+.ov-bar b { text-align: right; }
+.ov-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 420px; overflow: auto; }
+.ov-list li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ov-list li:last-child { border-bottom: 0; }
+.ov-card .chip.tiny { font-size: 11px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+.ov-card .muted.small { margin: 10px 0 0; }
+.ov-table td, .ov-table th { padding: 8px 10px; }
+@media (max-width: 720px) { .ov-grid { grid-template-columns: 1fr; } }

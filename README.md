@@ -7,14 +7,16 @@ index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
-admin.html          Leaders page: 12-hour login, attendance by Sunday, inbox, announcements, callings meeting, members, settings
+admin.html          Leaders page: 12-hour login, overview, attendance by Sunday, inbox, announcements, callings meeting, members, settings
+overview.js         Leaders › Overview: roll size, men/women, moved in last 30 days, sacrament attendance, accepted-not-sustained
 callings.js         Leaders › Callings: the members-without-callings list + one-person-per-slide meeting deck
 config.js           Supabase URL / anon key (public by design)
 announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
 supabase/schema.sql database (tables, RLS, RPC functions) — paste into the SQL editor once
 scripts/lcr-sync.js runs inside a signed-in LCR tab: roster → Supabase, check-ins → LCR
-scripts/lcr-report.js             runs inside a signed-in LCR tab: a custom report (members without callings) → site
+scripts/lcr-report.js             runs inside a signed-in LCR tab: a report table (members without callings, members moved in) → site
+scripts/lcr-sacrament.js          runs inside a signed-in LCR tab: the sacrament meeting headcounts → site
 scripts/announcements.gs          Google Apps Script: announcements email → repo, every Sunday night
 scripts/publish_announcements.py  same thing from a raw .eml, for manual use
 supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
@@ -67,6 +69,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    records the date in the "Flag sent" column (ticking that box in Edit records today's date
    too). After `flag_due_days_warning` / `_magnet` days (Settings; 21 / 7 by default) the person
    shows as *Ready to move out* so their records can be moved.
+
+5. **Leaders › Overview** is the landing page: active members and men/women split from the
+   roster, who moved in during the last 30 days (LCR's *Members Moved In* report, copied in as
+   sheet `lcr_moved_in`), the last five sacrament meeting headcounts (LCR's *Sacrament Meeting
+   Attendance*, sheet `lcr_sacrament` via `scripts/lcr-sacrament.js`), and everyone on the
+   callings sheet who accepted but hasn't been sustained. The two LCR copies are part of the
+   Sunday sync (`scripts/jobs.md`).
 
 ## Security model
 

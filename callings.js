@@ -644,5 +644,13 @@ window.NPCallings = (function () {
     $('deck-slide').addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 60) step(dx < 0 ? 1 : -1); });
   }
 
-  return { init, load, refresh: () => load(true) };
+  // for Leaders › Overview: the merged people list + sheet copies, and a way to jump to one person's slide
+  function data() { return { people, sheets, loaded }; }
+  function openPerson(sheetName) {
+    filter = 'all'; query = ''; if ($('cal-search')) $('cal-search').value = '';
+    applyFilter(); renderList();
+    const at = view.findIndex(x => x.sheetName === sheetName);
+    if (at >= 0) openDeck(at); else toast('Not on the list any more');
+  }
+  return { init, load, refresh: () => load(true), data, openPerson, isTicked };
 })();

@@ -49,6 +49,16 @@ Members-without-callings report — also every run (feeds Leaders › Callings):
    site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } with that result.
    The leaders' Google Sheet (notes) refreshes separately via the Apps Script / "refresh the sheets".
 
+Leaders › Overview feeds — also every run (two quick copies, no clicking):
+   LCR tab: navigate to https://lcr.churchofjesuschrist.org/mlt/report/members-moved-in?lang=eng,
+            set "Show for past" to 3 Months, wait for the table, run scripts/lcr-report.js
+            (window.NP_REPORT = { key: 'lcr_moved_in', title: 'LCR: Members Moved In (past 3 months)' });
+            keep only the columns Person UUID, Name, Age, Move In Date, Prior Unit (drop address/phone).
+   LCR tab: navigate to https://lcr.churchofjesuschrist.org/report/sacrament-attendance?lang=eng,
+            run scripts/lcr-sacrament.js (current year; in January also run it with year: <last year>
+            and merge the two row lists before storing).
+   site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } for each.
+
 Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
    LCR tab: window.NP_SYNC = { mode: 'roster', week: <week>, from: 0, to: 140 } then { from: 140, to: 400 }
    site tab: collect both slices in a window variable, then ONE db-sync call

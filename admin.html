@@ -36,7 +36,8 @@
 
     <div id="app" hidden>
       <div class="tabs">
-        <button class="tab on" data-pane="attendance">Attendance</button>
+        <button class="tab on" data-pane="overview">Overview</button>
+        <button class="tab" data-pane="attendance">Attendance</button>
         <button class="tab" data-pane="notes">Inbox<span class="badge" id="notes-badge" hidden></span></button>
         <button class="tab" data-pane="announcements">Announcements</button>
         <button class="tab" data-pane="callings">Callings</button>
@@ -46,8 +47,17 @@
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
       </div>
 
+      <!-- Overview: the quick-reference page (overview.js) -->
+      <section class="pane on" id="pane-overview">
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">A quick look at the ward — from LCR and the callings sheet.</span>
+          <button class="chip" id="ov-refresh">Refresh</button>
+        </div>
+        <div id="ov"><p class="muted">Loading…</p></div>
+      </section>
+
       <!-- Attendance -->
-      <section class="pane on" id="pane-attendance">
+      <section class="pane" id="pane-attendance">
         <div class="inline">
           <div class="field" style="margin:0"><label for="date">Sunday</label><select id="date"></select></div>
           <button class="btn small secondary" id="copy">Copy summary</button>
@@ -213,7 +223,8 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=13"></script>
+  <script src="callings.js?v=14"></script>
+  <script src="overview.js?v=1"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
@@ -229,10 +240,15 @@
         $('login').hidden = true; $('app').hidden = false;
         dates = await rpc('admin_meeting_dates', { p_pass: pass });
         await loadMembers(); await buildDates(); await loadAttendance(); loadNotesCount();
-        if (location.hash === '#callings') document.querySelector('.tab[data-pane=callings]').click();
+        const want = location.hash.replace('#', '');
+        if (want && document.querySelector(`.tab[data-pane=${want}]`)) document.querySelector(`.tab[data-pane=${want}]`).click();
+        else NPOverview.load();
       }
       NPCallings.init({ getPass: () => pass, getMembers: () => members });
       document.querySelector('.tab[data-pane=callings]').addEventListener('click', () => NPCallings.load());
+      NPOverview.init({ getPass: () => pass, getMembers: () => members, openCallings: name => { document.querySelector('.tab[data-pane=callings]').click(); NPCallings.load().then(() => NPCallings.openPerson(name)); } });
+      document.querySelector('.tab[data-pane=overview]').addEventListener('click', () => NPOverview.load());
+      $('ov-refresh').addEventListener('click', () => NPOverview.refresh());
       async function loginWithPassphrase(p) {
         $('login-msg').textContent = 'Checking…';
         try {
