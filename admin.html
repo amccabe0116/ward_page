@@ -105,6 +105,7 @@
             <div><dt><span class="pill off">Nothing yet</span> <span class="pill wait">Proposed</span> <span class="pill wait">Texted</span> <span class="pill need">Answered / Declined</span> <span class="pill ok">Accepted / Sustained</span></dt><dd>Where the calling stands, from the Proposed / Who texts / Texted / Answer / Sustained columns.</dd></div>
             <div><dt><span class="pill new">new</span> <span class="pill new">not on sheet</span></dt><dd>In the sheet's NEW ADDITIONS section, or on LCR's report but with no row on the sheet yet (saving an edit adds the row).</dd></div>
             <div><dt><span class="pill warn">Not in LCR</span> <span class="pill ok">Has a calling?</span></dt><dd>On the sheet but not on LCR's no-calling report: either their records are gone (Not in LCR — delete the row) or they're still on the roll, so they probably received a calling. Both are in the <em>Not in LCR</em> filter.</dd></div>
+            <div><dt><span class="pill due">Ready to move out</span></dt><dd>The warning / magnet message went out long enough ago (21 days for Warning, 7 for Magnet — change it under Settings) that it's time to move their records. The date comes from the "Flag sent" column, which is filled in automatically when you send from here or can be typed in.</dd></div>
             <div><dt><span class="pill wait">✎ pending</span></dt><dd>Edited here on the site; it goes into the Google Sheet the next time the sync runs.</dd></div>
           </dl>
         </details>
@@ -175,6 +176,11 @@
             <div class="field" style="margin:0;flex:1"><label for="n-from">Email sender name</label><input id="n-from" type="text" placeholder="North Point YSA Ward"></div>
             <div class="field" style="margin:0;flex:1"><label for="n-reply">Reply-to email <span class="opt">(optional)</span></label><input id="n-reply" type="email" placeholder="bishop@…"></div>
           </div>
+          <div class="inline" style="margin-top:6px">
+            <div class="field" style="margin:0"><label for="n-due-warning">Move records this many days after a Warning</label><input id="n-due-warning" type="number" min="1" max="365" placeholder="21" style="max-width:110px"></div>
+            <div class="field" style="margin:0"><label for="n-due-magnet">…after a Magnet</label><input id="n-due-magnet" type="number" min="1" max="365" placeholder="7" style="max-width:110px"></div>
+          </div>
+          <p class="muted" style="margin:6px 0 0">Once that many days have passed since the "Flag sent" date, the person shows a red <b>Ready to move out</b> tag and appears in that filter.</p>
           <h4 class="tpl-title">Warning</h4>
           <div class="field"><label for="n-warning-sms">Text message</label><textarea id="n-warning-sms" class="tpl"></textarea></div>
           <div class="field"><label for="n-warning-subject">Email subject</label><input id="n-warning-subject" type="text"></div>
@@ -207,7 +213,7 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
-  <script src="callings.js?v=7"></script>
+  <script src="callings.js?v=9"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
@@ -469,7 +475,7 @@
         for (const [id, key] of TPL) $(id).value = get(key) || '';
         $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
-      const TPL = [['n-from', 'notify_from_name'], ['n-reply', 'notify_reply_to'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
+      const TPL = [['n-from', 'notify_from_name'], ['n-reply', 'notify_reply_to'], ['n-due-warning', 'flag_due_days_warning'], ['n-due-magnet', 'flag_due_days_magnet'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
       $('n-save').addEventListener('click', async () => {
         try {
           for (const [id, key] of TPL) await rpc('admin_set_setting', { p_pass: pass, p_key: key, p_value: $(id).value });

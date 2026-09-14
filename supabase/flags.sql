@@ -5,7 +5,8 @@
 alter table public.callings_edits add column if not exists deleted boolean not null default false;
 
 -- Editable columns now include Flag + "Flag sent" (the Apps Script adds those columns to the
--- sheet if they don't exist yet).
+-- sheet if they don't exist yet). A value of null means "clear this cell on purpose"; a blank
+-- string is never written over something already in the sheet (see writePendingEdits_).
 create or replace function public.admin_callings_edit(p_pass text, p_name text, p_lcr_uuid text, p_values jsonb, p_by text default null)
 returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
@@ -17,9 +18,9 @@ begin
   if jsonb_typeof(p_values) <> 'object' then raise exception 'values must be an object'; end if;
   for v_key in select jsonb_object_keys(p_values) loop
     if not (v_key = any(v_allowed)) then raise exception 'column % is not editable', v_key; end if;
-    if jsonb_typeof(p_values -> v_key) <> 'string' then raise exception 'values must be strings'; end if;
+    if jsonb_typeof(p_values -> v_key) not in ('string', 'null') then raise exception 'values must be strings (or null to clear)'; end if;
     if length(p_values ->> v_key) > 500 then raise exception 'value too long'; end if;
-    if v_key = 'Flag' and not (btrim(p_values ->> v_key) in ('', 'Warning', 'Magnet')) then raise exception 'Flag must be Warning, Magnet or empty'; end if;
+    if v_key = 'Flag' and not (coalesce(btrim(p_values ->> v_key), '') in ('', 'Warning', 'Magnet')) then raise exception 'Flag must be Warning, Magnet or empty'; end if;
     v_clean := v_clean || jsonb_build_object(v_key, btrim(p_values ->> v_key));
   end loop;
   insert into callings_edits (name, lcr_uuid, edits, updated_at, updated_by, synced_at, deleted)

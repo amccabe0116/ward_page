@@ -156,46 +156,52 @@ function syncMemberSheets() {
   // 0. edits made on the Leaders page go into the callings sheet first, so the copy below has them
   try { result.written = writePendingEdits_(sbUrl, sbKey, adminPass); } catch (e) { Logger.log('Writing edits failed: %s', e && e.message); result.writeError = String(e && e.message); }
 
-  MEMBER_SHEETS.forEach(function (s) {
-    const ss = SpreadsheetApp.openById(s.id);
-    const sheet = s.tab ? ss.getSheetByName(s.tab) : ss.getSheets()[0];
-    if (!sheet) { Logger.log('Tab "%s" not found in %s — skipped', s.tab, ss.getName()); return; }
-    // Display values = exactly what leaders see in the sheet (dates as text, no formulas).
-    const values = sheet.getDataRange().getDisplayValues();
-    if (!values.length) return;
-    const headers = values[0].map(function (h) { return String(h || '').trim(); });
-    while (headers.length && !headers[headers.length - 1]) headers.pop();
-    const rows = [];
-    for (let i = 1; i < values.length; i++) {
-      const r = values[i].slice(0, headers.length).map(function (v) { return String(v == null ? '' : v).trim(); });
-      while (r.length < headers.length) r.push('');
-      if (r.some(function (v) { return v; })) rows.push(r);
-    }
-    const url = 'https://docs.google.com/spreadsheets/d/' + s.id + '/edit#gid=' + sheet.getSheetId();
-    const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_replace_sheet', {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
-      payload: JSON.stringify({ p_pass: adminPass, p_key: s.key, p_title: s.title, p_source_url: url, p_headers: headers, p_rows: rows, p_by: 'apps-script' }),
-    });
-    if (res.getResponseCode() >= 300) throw new Error(s.key + ': Supabase said ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
-    result[s.key] = rows.length;
-    Logger.log('%s: %s rows, %s columns', s.key, rows.length, headers.length);
-  });
+  MEMBER_SHEETS.forEach(function (s) { result[s.key] = pullSheet_(s, sbUrl, sbKey, adminPass); });
   return result;
+}
+
+// One Google Sheet tab → the `sheets` table (display values = exactly what leaders see: dates as
+// text, no formulas). Returns the row count, or -1 when the tab is missing.
+function pullSheet_(s, sbUrl, sbKey, adminPass) {
+  const ss = SpreadsheetApp.openById(s.id);
+  const sheet = s.tab ? ss.getSheetByName(s.tab) : ss.getSheets()[0];
+  if (!sheet) { Logger.log('Tab "%s" not found in %s — skipped', s.tab, ss.getName()); return -1; }
+  const values = sheet.getDataRange().getDisplayValues();
+  if (!values.length) return 0;
+  const headers = values[0].map(function (h) { return String(h || '').trim(); });
+  while (headers.length && !headers[headers.length - 1]) headers.pop();
+  const rows = [];
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i].slice(0, headers.length).map(function (v) { return String(v == null ? '' : v).trim(); });
+    while (r.length < headers.length) r.push('');
+    if (r.some(function (v) { return v; })) rows.push(r);
+  }
+  const url = 'https://docs.google.com/spreadsheets/d/' + s.id + '/edit#gid=' + sheet.getSheetId();
+  const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_replace_sheet', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
+    payload: JSON.stringify({ p_pass: adminPass, p_key: s.key, p_title: s.title, p_source_url: url, p_headers: headers, p_rows: rows, p_by: 'apps-script' }),
+  });
+  if (res.getResponseCode() >= 300) throw new Error(s.key + ': Supabase said ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
+  Logger.log('%s: %s rows, %s columns', s.key, rows.length, headers.length);
+  return rows.length;
 }
 
 // Edits saved on the Leaders page (supabase/edits.sql) → the "Members without Callings" sheet.
 // Finds each person's row by NAME (exact, then ignoring anything in parentheses / accents),
 // appends a new row when they are not on the sheet yet, writes only the edited columns, then
-// tells the database those edits are in. Returns how many were written.
-function writePendingEdits_(sbUrl, sbKey, adminPass) {
+// tells the database those edits are in. A blank edit never overwrites something already in the
+// sheet (only an explicit clear from the site — stored as null — empties a cell). Pass onlyNames
+// to write just those people (the "Save to sheet" button on a slide). Returns how many were written.
+function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
   const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_callings_pending', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass }),
   });
   if (res.getResponseCode() === 404) return 0;  // edits.sql not run yet
   if (res.getResponseCode() >= 300) throw new Error('admin_callings_pending ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 120));
-  const pending = JSON.parse(res.getContentText() || '[]');
+  let pending = JSON.parse(res.getContentText() || '[]');
+  if (onlyNames) { const want = onlyNames.map(function (n) { return String(n).trim().toLowerCase(); }); pending = pending.filter(function (e) { return want.indexOf(String(e.name).trim().toLowerCase()) >= 0; }); }
   if (!pending.length) return 0;
   const asOf = new Date().toISOString();
 
@@ -228,7 +234,12 @@ function writePendingEdits_(sbUrl, sbKey, adminPass) {
     if (e.deleted) { const r = rowOf(e.name); if (r) toDelete.push(r); else Logger.log('delete: %s not on the sheet (already gone)', e.name); done.push(e.name); return; }
     let row = rowOf(e.name);
     if (!row) { row = sheet.getLastRow() + 1; sheet.getRange(row, nameCol).setValue(e.name); data.push([]); }
-    Object.keys(e.edits || {}).forEach(function (k) { sheet.getRange(row, col(k)).setValue(e.edits[k]); });
+    Object.keys(e.edits || {}).forEach(function (k) {
+      const v = e.edits[k], c = col(k), current = String((data[row - 1] || [])[c - 1] == null ? '' : (data[row - 1] || [])[c - 1]).trim();
+      if (v === null) { sheet.getRange(row, c).clearContent(); return; }          // cleared on purpose on the site
+      if (String(v).trim() === '' && current) { Logger.log('%s / %s: blank edit kept "%s"', e.name, k, current); return; }
+      sheet.getRange(row, c).setValue(v);
+    });
     done.push(e.name);
     Logger.log('sheet row %s ← %s: %s', row, e.name, JSON.stringify(e.edits));
   });
@@ -242,14 +253,25 @@ function writePendingEdits_(sbUrl, sbKey, adminPass) {
   return done.length;
 }
 
-// Web app entry point for the "Refresh from Google Sheets" button (see setup step 7).
-// Body: {"action":"sheets","pass":"<Leaders passphrase>"}  → {"ok":true,"callings":130,…}
+// Web app entry point for the Leaders page (see setup step 7). Body is JSON with the Leaders
+// passphrase or session token as "pass" and an "action":
+//   sheets → write every pending edit to the callings sheet, then re-copy all sheets  {"ok":true,"written":2,"callings":130,…}
+//   save   → one person's pending edits ("name") to the sheet, re-copy the callings sheet
+//   notify → send a Warning / Magnet text + email (sendFlagMessage_)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
     if (body.action === 'notify') return out(sendFlagMessage_(body));
+    if (body.action === 'save') {  // one person's edits → the sheet now (the "Save to sheet" button on a slide)
+      const props = PropertiesService.getScriptProperties();
+      const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+      const written = writePendingEdits_(sbUrl, sbKey, adminPass, [String(body.name || '')]);
+      const cfg = MEMBER_SHEETS.filter(function (s) { return s.key === 'callings'; })[0];
+      const rows = pullSheet_(cfg, sbUrl, sbKey, adminPass);
+      return out({ ok: true, written: written, callings: rows });
+    }
     if (body.action !== 'sheets') return out({ ok: false, error: 'unknown action' });
     const r = syncMemberSheets(); r.ok = true;
     return out(r);

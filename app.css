@@ -280,6 +280,11 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .pill.flag { background: #fde8e8; color: var(--danger); }
 .pill.new { background: #f2ecdd; color: #6b4e0b; }
 .pill.magnet { background: #ede7f6; color: #4a2d8a; }
+.pill.due { background: var(--danger); color: #fff; }
+.cal-grid td.flag-cell { min-width: 150px; }
+.cal-grid td.flag-cell .small { font-size: 12px; margin-top: 2px; }
+.cal-grid td.flag-cell .pill.due { margin: 4px 0 0; }
+.due-text { color: var(--danger); font-weight: 600; }
 .pill.inferred { border: 1px dashed currentColor; background: transparent; }
 .row-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .row-pills .pill { margin-left: 0; font-size: 11px; padding: 1px 7px; }
@@ -344,7 +349,10 @@ body.deck-open { overflow: hidden; }
 .slide-card h3 .muted { font-family: var(--font); font-size: 14px; font-weight: 400; }
 /* editing the sheet columns on a slide */
 .slide-card.calling h3 { display: flex; align-items: center; gap: 10px; }
-.slide-card h3 .edit-btn { margin-left: auto; font-size: 12px; padding: 3px 10px; font-family: var(--font); font-weight: 400; }
+.slide-card h3 .edit-btn, .slide-card h3 .save-sheet-btn { font-size: 12px; padding: 3px 10px; font-family: var(--font); font-weight: 400; }
+.slide-card h3 .edit-btn { margin-left: auto; }
+.slide-card h3 .save-sheet-btn { margin-left: 6px; background: var(--navy); color: #fff; border-color: var(--navy); }
+.slide-card h3 .save-sheet-btn:disabled { opacity: .6; }
 .edit-form { display: grid; gap: 8px; }
 .edit-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
 .edit-field { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; width: 100%; background: var(--card); color: var(--ink); }
