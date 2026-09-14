@@ -117,6 +117,7 @@
             <div><dt><span class="pill warn">Not in LCR</span> <span class="pill ok">Has a calling?</span></dt><dd>On the sheet but not on LCR's no-calling report: either their records are gone (Not in LCR — delete the row) or they're still on the roll, so they probably received a calling. Both are in the <em>Not in LCR</em> filter.</dd></div>
             <div><dt><span class="pill due">Ready to move out</span></dt><dd>The warning / magnet message went out long enough ago (21 days for Warning, 7 for Magnet — change it under Settings) that it's time to move their records. The date comes from the "Flag sent" column, which is filled in automatically when you send from here or can be typed in.</dd></div>
             <div><dt><span class="pill wait">✎ pending</span></dt><dd>Edited here on the site; it goes into the Google Sheet the next time the sync runs.</dd></div>
+            <div><dt><span class="pill warn">Removed</span></dt><dd><em>Remove</em> on a slide takes someone off this list: their row is deleted from the Google Sheet and they stay hidden until LCR stops listing them (records moved, or a calling recorded). Find them under the <em>Removed</em> filter to undo.</dd></div>
           </dl>
         </details>
         <div id="cal-list" style="margin-top:12px"><p class="empty">Loading…</p></div>
@@ -223,7 +224,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=14"></script>
+  <script src="callings.js?v=15"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {

@@ -349,9 +349,10 @@ body.deck-open { overflow: hidden; }
 .slide-card h3 .muted { font-family: var(--font); font-size: 14px; font-weight: 400; }
 /* editing the sheet columns on a slide */
 .slide-card.calling h3 { display: flex; align-items: center; gap: 10px; }
-.slide-card h3 .edit-btn, .slide-card h3 .save-sheet-btn { font-size: 12px; padding: 3px 10px; font-family: var(--font); font-weight: 400; }
-.slide-card h3 .edit-btn { margin-left: auto; }
-.slide-card h3 .save-sheet-btn { margin-left: 6px; background: var(--navy); color: #fff; border-color: var(--navy); }
+.slide-card h3 .slide-actions { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.slide-card h3 .slide-actions .chip { font-size: 12px; padding: 3px 10px; font-family: var(--font); font-weight: 400; }
+.slide-card h3 .remove-btn.danger { color: var(--danger); border-color: #efc7c7; }
+.slide-card h3 .save-sheet-btn { background: var(--navy); color: #fff; border-color: var(--navy); }
 .slide-card h3 .save-sheet-btn:disabled { opacity: .6; }
 .edit-form { display: grid; gap: 8px; }
 .edit-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
