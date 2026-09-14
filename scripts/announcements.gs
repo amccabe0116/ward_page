@@ -28,10 +28,13 @@
  *      into the "Members without Callings" sheet — only the meeting columns (proposed calling,
  *      who texts, texted, answer, sustained, other notes); people not on the sheet get a new row.
  *      Needs supabase/edits.sql.
- *   7. Optional "Refresh from Google Sheets" button on the Leaders page:
+ *   7. "Refresh from Google Sheets" button + sending Warning / Magnet messages from the site:
  *      Deploy → New deployment → Web app · Execute as: Me · Who has access: Anyone → Deploy,
  *      copy the web-app URL into `sheetsRefreshUrl` in config.js. The endpoint only does
- *      anything when the Leaders passphrase is sent with the request.
+ *      anything when a signed-in leader's token (or the passphrase) is sent with the request.
+ *   8. Texts: Script properties → SIMPLETEXTING_KEY = an API key from SimpleTexting
+ *      (Settings → API), and SIMPLETEXTING_NUMBER = the ward texting number (digits only).
+ *      Emails go from this Google account (GmailApp); the wording lives under Leaders › Settings.
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -201,7 +204,15 @@ function writePendingEdits_(sbUrl, sbKey, adminPass) {
   const sheet = cfg.tab ? ss.getSheetByName(cfg.tab) : ss.getSheets()[0];
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(function (h) { return String(h || '').trim(); });
-  const col = function (name) { const i = headers.indexOf(name); if (i < 0) throw new Error('column "' + name + '" not found on the sheet'); return i + 1; };
+  // columns the site can write; "Flag" and "Flag sent" are added to the sheet the first time they are needed
+  const col = function (name) {
+    let i = headers.indexOf(name);
+    if (i < 0) {
+      if (name !== 'Flag' && name !== 'Flag sent') throw new Error('column "' + name + '" not found on the sheet');
+      i = headers.length; headers.push(name); sheet.getRange(1, i + 1).setValue(name).setFontWeight('bold');
+    }
+    return i + 1;
+  };
   const nameCol = col('NAME');
   const norm = function (s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z' -]/g, ' ').replace(/\s+/g, ' ').trim(); };
   const rowOf = function (name) {
@@ -211,13 +222,17 @@ function writePendingEdits_(sbUrl, sbKey, adminPass) {
     return 0;
   };
   const done = [];
+  // deletions last, bottom-up, so row numbers stay valid
+  const toDelete = [];
   pending.forEach(function (e) {
+    if (e.deleted) { const r = rowOf(e.name); if (r) toDelete.push(r); else Logger.log('delete: %s not on the sheet (already gone)', e.name); done.push(e.name); return; }
     let row = rowOf(e.name);
-    if (!row) { row = sheet.getLastRow() + 1; sheet.getRange(row, nameCol).setValue(e.name); }
+    if (!row) { row = sheet.getLastRow() + 1; sheet.getRange(row, nameCol).setValue(e.name); data.push([]); }
     Object.keys(e.edits || {}).forEach(function (k) { sheet.getRange(row, col(k)).setValue(e.edits[k]); });
     done.push(e.name);
     Logger.log('sheet row %s ← %s: %s', row, e.name, JSON.stringify(e.edits));
   });
+  toDelete.sort(function (a, b) { return b - a; }).forEach(function (r) { Logger.log('deleting sheet row %s (%s)', r, data[r - 1][nameCol - 1]); sheet.deleteRow(r); });
   SpreadsheetApp.flush();
   const mark = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_callings_mark_synced', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -234,12 +249,50 @@ function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
+    if (body.action === 'notify') return out(sendFlagMessage_(body));
     if (body.action !== 'sheets') return out({ ok: false, error: 'unknown action' });
     const r = syncMemberSheets(); r.ok = true;
     return out(r);
   } catch (err) { return out({ ok: false, error: String(err && err.message || err) }); }
 }
 function doGet() { return ContentService.createTextOutput('ok'); }
+
+// Warning / Magnet message from a person's slide: a text through SimpleTexting (script
+// property SIMPLETEXTING_KEY = an API key from SimpleTexting → Settings → API; optional
+// SIMPLETEXTING_NUMBER = the ward's texting number, digits only) and/or an email from this
+// Google account. The page sends the already-filled-in wording, so it is exactly what the leader
+// saw in the confirmation box. Returns { ok, sms: 'sent'|'skipped'|'failed', email: … }.
+function sendFlagMessage_(b) {
+  const props = PropertiesService.getScriptProperties();
+  const res = { ok: true, sms: 'skipped', email: 'skipped' };
+  const phone = String(b.phone || '').replace(/\D/g, '');
+  if (phone && b.sms) {
+    const key = props.getProperty('SIMPLETEXTING_KEY');
+    if (!key) { res.sms = 'failed'; res.error = 'SIMPLETEXTING_KEY is not set in Script properties'; }
+    else {
+      const payload = { contactPhone: phone.length === 10 ? '1' + phone : phone, mode: 'AUTO', text: b.sms };
+      const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
+      const r = UrlFetchApp.fetch('https://api-app2.simpletexting.com/v2/api/messages', {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { Authorization: 'Bearer ' + key }, payload: JSON.stringify(payload),
+      });
+      if (r.getResponseCode() < 300) res.sms = 'sent';
+      else { res.sms = 'failed'; res.error = 'SimpleTexting ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200); }
+      Logger.log('SimpleTexting → %s: %s %s', phone, r.getResponseCode(), r.getContentText().slice(0, 200));
+    }
+  }
+  if (b.email && b.body) {
+    try {
+      const opts = { name: b.fromName || 'North Point YSA Ward' };
+      if (b.replyTo) opts.replyTo = b.replyTo;
+      GmailApp.sendEmail(b.email, b.subject || 'North Point YSA', b.body, opts);
+      res.email = 'sent';
+    } catch (e) { res.email = 'failed'; res.error = (res.error ? res.error + '; ' : '') + 'email: ' + (e && e.message); }
+  }
+  res.ok = res.sms !== 'failed' && res.email !== 'failed' && (res.sms === 'sent' || res.email === 'sent');
+  if (!res.ok && !res.error) res.error = 'nothing to send (no phone/text or email/body)';
+  return res;
+}
 
 // The Leaders page sends its 12-hour session token, not the passphrase, so ask the database
 // whether it is valid (any admin function will do). The passphrase itself is accepted too.

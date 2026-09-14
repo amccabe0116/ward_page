@@ -23,6 +23,7 @@ supabase/notes.sql                notes to leadership + hardened Leaders login (
 supabase/inbox.sql                editable announcements + Bishop meeting requests (part of schema.sql too)
 supabase/sheets.sql               mirrors the two leadership Google Sheets (callings doc, new-member form)
 supabase/edits.sql                site-side edits to the callings sheet, written back by the Apps Script
+supabase/flags.sql                Flag column (Warning/Magnet), row deletion, message templates
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -54,7 +55,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    The meeting columns (proposed calling, who texts, texted, answer, sustained, other notes)
    are editable on the slide: edits save to `callings_edits` (`supabase/edits.sql`), show on
    the site at once, and `syncMemberSheets` writes them into the Google Sheet on its next run
-   (adding a row for anyone not on the sheet yet). Everything else is still edited in the sheet.
+   (adding a row for anyone not on the sheet yet, deleting rows marked for deletion). Everything
+   else is still edited in the sheet. **Flag** is its own sheet column (Warning = may be sent
+   back to their home ward if they don't attend; Magnet = being sent back, no new-member
+   meeting) — `supabase/flags.sql`; the site infers it from old "Warning"/"Magnet" notes until
+   converted. *Send the warning / magnet message* on a slide texts (SimpleTexting) and emails
+   the person through the Apps Script web app with the wording under Leaders › Settings, and
+   records the date in the "Flag sent" column.
 
 ## Security model
 

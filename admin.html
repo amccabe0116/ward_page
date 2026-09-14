@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="app.css">
   <style>
-    .wrap { max-width: 820px; }
+    .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
   </style>
 </head>
@@ -96,6 +96,18 @@
           <span class="muted" id="cal-meta" style="margin-left:auto"></span>
         </div>
         <div class="chips" id="cal-filters"></div>
+        <details class="legend">
+          <summary class="muted">What the tags mean</summary>
+          <dl class="legend-list">
+            <div><dt><span class="pill flag">Warning</span></dt><dd>Attending a YSA ward is optional — we're telling them that if they don't start showing up, their records go back to their home ward. <em>Send the warning message</em> on their slide texts/emails them and records the date.</dd></div>
+            <div><dt><span class="pill magnet">Magnet</span></dt><dd>Their records came in without a new-member meeting, so they're being sent back to their previous ward. <em>Send the magnet message</em> does the same for this case.</dd></div>
+            <div><dt><span class="pill off">Move</span> <span class="pill off">Check</span> <span class="pill off">Hold</span> <span class="pill off">Aged out</span> <span class="pill off">Unreachable</span></dt><dd>Read from the Other Notes column: moving / moved, needs an RS or EQ check-in (or to meet the Bishop), on hold, aged out of YSA, or texts bounce / no response.</dd></div>
+            <div><dt><span class="pill off">Nothing yet</span> <span class="pill wait">Proposed</span> <span class="pill wait">Texted</span> <span class="pill need">Answered / Declined</span> <span class="pill ok">Accepted / Sustained</span></dt><dd>Where the calling stands, from the Proposed / Who texts / Texted / Answer / Sustained columns.</dd></div>
+            <div><dt><span class="pill new">new</span> <span class="pill new">not on sheet</span></dt><dd>In the sheet's NEW ADDITIONS section, or on LCR's report but with no row on the sheet yet (saving an edit adds the row).</dd></div>
+            <div><dt><span class="pill warn">Not in LCR</span> <span class="pill ok">Has a calling?</span></dt><dd>On the sheet but not on LCR's no-calling report: either their records are gone (Not in LCR — delete the row) or they're still on the roll, so they probably received a calling. Both are in the <em>Not in LCR</em> filter.</dd></div>
+            <div><dt><span class="pill wait">✎ pending</span></dt><dd>Edited here on the site; it goes into the Google Sheet the next time the sync runs.</dd></div>
+          </dl>
+        </details>
         <div id="cal-list" style="margin-top:12px"><p class="empty">Loading…</p></div>
         <p class="muted cal-foot">
           <a id="cal-open-sheet" href="#" target="_blank" rel="noopener" hidden>Open the callings sheet ↗</a>
@@ -155,6 +167,24 @@
           </div>
           <div class="inline" style="margin-top:12px"><button class="btn small" id="w-save">Save</button><span class="muted" id="w-msg"></span></div>
         </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin-top:0">Warning / Magnet messages</h3>
+          <p class="muted">What <em>Send the warning / magnet message</em> on a person's slide sends. <code>{first}</code> = first name, <code>{name}</code> = full name. Texts go out through the ward's SimpleTexting number and emails from the Google account running the script (set up in <code>scripts/announcements.gs</code>). Please read these through as a bishopric before the first send.</p>
+          <div class="inline">
+            <div class="field" style="margin:0;flex:1"><label for="n-from">Email sender name</label><input id="n-from" type="text" placeholder="North Point YSA Ward"></div>
+            <div class="field" style="margin:0;flex:1"><label for="n-reply">Reply-to email <span class="opt">(optional)</span></label><input id="n-reply" type="email" placeholder="bishop@…"></div>
+          </div>
+          <h4 class="tpl-title">Warning</h4>
+          <div class="field"><label for="n-warning-sms">Text message</label><textarea id="n-warning-sms" class="tpl"></textarea></div>
+          <div class="field"><label for="n-warning-subject">Email subject</label><input id="n-warning-subject" type="text"></div>
+          <div class="field"><label for="n-warning-email">Email</label><textarea id="n-warning-email" class="tpl tall"></textarea></div>
+          <h4 class="tpl-title">Magnet</h4>
+          <div class="field"><label for="n-magnet-sms">Text message</label><textarea id="n-magnet-sms" class="tpl"></textarea></div>
+          <div class="field"><label for="n-magnet-subject">Email subject</label><input id="n-magnet-subject" type="text"></div>
+          <div class="field"><label for="n-magnet-email">Email</label><textarea id="n-magnet-email" class="tpl tall"></textarea></div>
+          <div class="inline" style="margin-top:12px"><button class="btn small" id="n-save">Save messages</button><span class="muted" id="n-msg"></span></div>
+        </div>
       </section>
     </div>
   </main>
@@ -177,7 +207,7 @@
 
   <script src="config.js"></script>
   <script src="app.js"></script>
-  <script src="callings.js?v=5"></script>
+  <script src="callings.js?v=6"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
@@ -436,7 +466,16 @@
         [$('w-prs-start').value, $('w-prs-end').value] = split(get('window_priesthood_rs') || '13:20-14:30');
         $('w-day').value = get('window_day') || '0';
         $('w-enforce').checked = (get('roll_enforce_window') || 'true') === 'true';
+        for (const [id, key] of TPL) $(id).value = get(key) || '';
+        $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
+      const TPL = [['n-from', 'notify_from_name'], ['n-reply', 'notify_reply_to'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
+      $('n-save').addEventListener('click', async () => {
+        try {
+          for (const [id, key] of TPL) await rpc('admin_set_setting', { p_pass: pass, p_key: key, p_value: $(id).value });
+          $('n-msg').textContent = 'Saved.'; if (window.NPCallings) NPCallings.refresh();
+        } catch (e) { $('n-msg').textContent = 'Not saved: ' + e.message; }
+      });
       $('w-save').addEventListener('click', async () => {
         try {
           await rpc('admin_set_setting', { p_pass: pass, p_key: 'window_sunday_school', p_value: $('w-ss-start').value + '-' + $('w-ss-end').value });

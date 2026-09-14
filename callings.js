@@ -147,8 +147,20 @@ window.NPCallings = (function () {
       const pending = !!(ed && (!ed.synced_at || new Date(ed.updated_at) > sheetAt));
       if (pending) Object.assign(o, ed.edits);
       const notes = o['Other Notes'] || '';
+      // Flag is its own column (Warning / Magnet). Older rows only have the word in Other Notes — infer it
+      // for display until a leader saves the real flag.
+      let flag = /^(warning|magnet)$/i.test(o.Flag || '') ? o.Flag.replace(/^\w/, c => c.toUpperCase()) : '', flagInferred = false;
+      if (!flag && /magnet/i.test(notes)) { flag = 'Magnet'; flagInferred = true; }
+      else if (!flag && /warn|warming/i.test(notes)) { flag = 'Warning'; flagInferred = true; }
+      const tags = [];
+      if (/\bmov(e|ed|ing)\b/i.test(notes) || /moved|moving/i.test(tag)) tags.push('Move');
+      if (/check|bishop meet/i.test(notes)) tags.push('Check');
+      if (/hold/i.test(notes)) tags.push('Hold');
+      if (/aged out/i.test(notes) || /aged out/i.test(tag)) tags.push('Aged out');
+      if (/unresponsive|undeliverable/i.test(notes)) tags.push('Unreachable');
       return { name, sheetName, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr, pending, editedAt: ed ? ed.updated_at : null,
-        flagged: /warning|warming|move|check|magnet|aged out|unresponsive|declin|hold/i.test(notes) || /moved|aged out|moving/i.test(tag),
+        deleted: !!(ed && ed.deleted && pending), flag, flagInferred, flagSent: o['Flag sent'] || '', tags,
+        flagged: !!flag || tags.length > 0,
         proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
         texted: o['texted'] || '', answer: o['answer'] || '', sustained: o['sustained'] || '' };
     };
@@ -184,17 +196,28 @@ window.NPCallings = (function () {
     if (truthy(p.answer)) return { k: 'need', t: /declin|not at this time|moved|not in ward|undeliverable/i.test(p.answer) ? 'Declined' : 'Answered' };
     if (truthy(p.texted)) return { k: 'wait', t: 'Texted' };
     if (truthy(p.proposed) || truthy(p.assignment)) return { k: 'wait', t: 'Proposed' };
-    if (p.flagged) return { k: 'flag', t: 'Flagged' };
     return { k: 'off', t: 'Nothing yet' };
   }
   const FILTERS = {
-    all: { label: 'Everyone', test: p => !p.sheetOnly },
-    none: { label: 'Nothing proposed', test: p => !p.sheetOnly && !truthy(p.proposed) && !truthy(p.assignment) && !p.flagged },
-    waiting: { label: 'Proposed, waiting', test: p => !p.sheetOnly && (truthy(p.proposed) || truthy(p.assignment)) && !truthy(p.sustained) && !/accept/i.test(p.answer) },
-    flagged: { label: 'Flagged', test: p => !p.sheetOnly && p.flagged },
-    new: { label: 'New / not on sheet', test: p => !p.sheetOnly && (!!p.section || !p.onSheet) },
-    sheetOnly: { label: 'On sheet, not in LCR report', test: p => !!p.sheetOnly },
+    all: { label: 'Everyone', test: p => !p.sheetOnly && !p.deleted },
+    none: { label: 'Nothing proposed', test: p => !p.sheetOnly && !p.deleted && !truthy(p.proposed) && !truthy(p.assignment) && !p.flag },
+    waiting: { label: 'Proposed, waiting', test: p => !p.sheetOnly && !p.deleted && (truthy(p.proposed) || truthy(p.assignment)) && !truthy(p.sustained) && !/accept/i.test(p.answer) },
+    warning: { label: 'Warning', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Warning' },
+    magnet: { label: 'Magnet', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Magnet' },
+    other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && p.tags.length > 0 },
+    new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (!!p.section || !p.onSheet) },
+    sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly },
   };
+  const FLAG_CLASS = { Warning: 'flag', Magnet: 'magnet' };
+  function flagPill(p, opts) {
+    if (!p.flag) return null;
+    return el('span', { class: 'pill ' + FLAG_CLASS[p.flag] + (p.flagInferred ? ' inferred' : ''), title: p.flagInferred ? 'Found in Other Notes — open Edit to set the Flag column' : (p.flagSent ? 'Message sent ' + p.flagSent : '') }, p.flag + (opts && opts.long && p.flagSent ? ' · sent ' + p.flagSent : '') + (p.flagInferred && opts && opts.long ? ' (from notes)' : ''));
+  }
+  function sheetOnlyPill(p) {
+    if (!p.sheetOnly) return null;
+    const inLcr = p.member && p.member.active;
+    return el('span', { class: 'pill ' + (inLcr ? 'ok' : 'warn'), title: inLcr ? 'On the roll but no longer on LCR\'s no-calling report — probably has a calling now' : 'Not on the LCR roll (records moved out or never here)' }, inLcr ? 'Has a calling?' : 'Not in LCR');
+  }
 
   function attFor(p) {
     const rows = p.member ? attendance.get(p.member.id) : null;
@@ -218,26 +241,36 @@ window.NPCallings = (function () {
       const n = people.filter(f.test).length;
       chips.appendChild(el('button', { class: 'chip' + (filter === k ? ' on' : ''), onclick: () => { filter = k; renderList(); } }, `${f.label} · ${n}`));
     }
+    const nInferred = people.filter(p => p.flagInferred && !p.deleted).length;
+    if (nInferred) chips.appendChild(el('button', { class: 'chip convert', title: 'These still have the word in Other Notes; this sets the Flag column for all of them', onclick: convertAllFlags }, `Move ${nInferred} note${nInferred === 1 ? '' : 's'} → Flag column`));
     const cs = sheets.callings;
     const ls = sheets.lcr_callings, when = d => new Date(d).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    const nPending = people.filter(p => p.pending).length;
-    $('cal-meta').textContent = (ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '')) + (nPending ? ` · ${nPending} edit${nPending === 1 ? '' : 's'} waiting to go to the sheet` : '');
+    const nPending = people.filter(p => p.pending && !p.deleted).length, nDel = people.filter(p => p.deleted).length;
+    $('cal-meta').textContent = (ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '')) + (nPending ? ` · ${nPending} edit${nPending === 1 ? '' : 's'} waiting to go to the sheet` : '') + (nDel ? ` · ${nDel} row${nDel === 1 ? '' : 's'} to delete` : '');
     if (!view.length) { box.appendChild(el('p', { class: 'empty' }, people.length ? 'Nobody matches.' : 'No sheet data yet — run supabase/sheets.sql, then refresh the sheets.')); return; }
-    const t = el('table', { class: 'grid cal-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, ''), el('th', {}, 'Calling'), el('th', {}, 'Status'), el('th', {}, 'Last 4'), el('th', {}, 'Form')])));
+    const wrap = el('div', { class: 'cal-scroll' });
+    const t = el('table', { class: 'grid cal-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, ''), el('th', {}, 'Flag'), el('th', {}, 'Other notes'), el('th', {}, 'Proposed calling'), el('th', {}, 'Who texts'), el('th', {}, 'Texted'), el('th', {}, 'Answer'), el('th', {}, filter === 'sheetOnly' ? '' : 'Last 4')])));
     const tb = el('tbody');
     view.forEach((p, vi) => {
       const st = status(p);
-      const latest = p.forms[0];
-      tb.appendChild(el('tr', { class: 'cal-row', tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
-        el('td', {}, [el('b', {}, p.name), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, p.tag ? el('span', { class: 'pill off' }, p.tag) : null, p.pending ? el('span', { class: 'pill wait', title: 'Edited here; written to the Google Sheet on the next sync' }, '✎') : null]),
-        el('td', { class: 'muted' }, p.lcr ? [p.lcr.Age, p.lcr['Address - City']].filter(truthy).join(' · ') : [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
-        el('td', {}, p.proposed ? [p.proposed, p.assignment ? el('span', { class: 'muted' }, ' · ' + p.assignment + ' to text') : null] : (p.notes ? el('span', { class: 'muted' }, p.notes) : '')),
-        el('td', {}, el('span', { class: 'pill ' + st.k }, st.t)),
-        el('td', {}, p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR')),
-        el('td', { class: 'muted' }, latest ? (latest.when ? fmtShort(latest.when) : 'yes') : '—'),
+      const last = p.sheetOnly
+        ? (p.deleted
+          ? el('span', { class: 'inline-actions' }, [el('span', { class: 'muted' }, 'deleting from sheet on next sync'), el('button', { class: 'chip', onclick: e => { e.stopPropagation(); setDeleted(p, false); } }, 'Undo')])
+          : el('button', { class: 'chip danger', title: 'Remove this row from the Google Sheet on the next sync', onclick: e => { e.stopPropagation(); if (confirm(`Delete ${p.name} from the Members without Callings sheet?`)) setDeleted(p, true); } }, 'Delete'))
+        : (p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR'));
+      tb.appendChild(el('tr', { class: 'cal-row' + (p.deleted ? ' deleted' : ''), tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
+        el('td', {}, [el('b', {}, p.name), el('div', { class: 'row-pills' }, [el('span', { class: 'pill ' + st.k }, st.t), sheetOnlyPill(p), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)), p.tag ? el('span', { class: 'pill off' }, p.tag) : null, p.pending ? el('span', { class: 'pill wait', title: 'Edited here; written to the Google Sheet on the next sync' }, '✎ pending') : null])]),
+        el('td', { class: 'muted nowrap' }, p.lcr ? [p.lcr.Age, p.lcr['Address - City']].filter(truthy).join(' · ') : [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
+        el('td', {}, flagPill(p)),
+        el('td', { class: 'notes-cell' }, p.notes),
+        el('td', {}, p.proposed),
+        el('td', {}, p.assignment),
+        el('td', {}, p.texted),
+        el('td', {}, p.answer),
+        el('td', {}, last),
       ]));
     });
-    t.appendChild(tb); box.appendChild(t);
+    t.appendChild(tb); wrap.appendChild(t); box.appendChild(wrap);
   }
 
   // ---------- meeting deck ----------
@@ -278,12 +311,15 @@ window.NPCallings = (function () {
       ]) : null,
       el('div', { class: 'badges' }, [
         el('span', { class: 'pill ' + st.k }, st.t),
+        flagPill(p, { long: true }),
+        ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
         p.section ? el('span', { class: 'pill new' }, p.section) : null,
         (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'Not on the sheet yet') : null,
-        p.sheetOnly ? el('span', { class: 'pill warn' }, 'Not on LCR\'s no-calling report any more') : null,
+        sheetOnlyPill(p),
+        p.deleted ? el('span', { class: 'pill warn' }, 'Deleting from the sheet on next sync') : null,
         truthy(o['RECENT CONVERT (under yr)']) ? el('span', { class: 'pill recommend' }, 'Recent convert ' + (o['RECENT CONVERT (under yr)'].replace(/^yes\s*-?\s*/i, '').trim())) : null,
         p.tag ? el('span', { class: 'pill off' }, p.tag) : null,
-        p.member ? (p.member.active ? null : el('span', { class: 'pill warn' }, 'Records have moved out')) : el('span', { class: 'pill warn' }, 'Not in LCR any more'),
+        (!p.sheetOnly && p.member && !p.member.active) ? el('span', { class: 'pill warn' }, 'Records have moved out') : null,
       ]),
     ]);
     const calling = el('section', { class: 'slide-card calling' }, [
@@ -291,6 +327,14 @@ window.NPCallings = (function () {
       truthy(p.notes) ? el('p', { class: 'note-line' }, p.notes) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', p.texted], ['Answer', p.answer], ['Sustained', p.sustained]]),
       (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
+      p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
+        el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag], p.flagInferred ? el('span', { class: 'muted' }, ' (found in Other Notes — press Edit to set the Flag column)') : null]),
+        el('div', { class: 'flag-actions' }, [
+          el('button', { class: 'chip', type: 'button', onclick: () => sendFlagMessage(p) }, (p.flagSent ? 'Send again' : 'Send the ' + p.flag.toLowerCase() + ' message') + (L['Individual Phone'] && L['Individual E-mail'] ? ' (text + email)' : L['Individual Phone'] ? ' (text)' : L['Individual E-mail'] ? ' (email)' : '')),
+          p.flagSent ? el('span', { class: 'muted' }, 'Sent ' + p.flagSent) : null,
+          (!L['Individual Phone'] && !L['Individual E-mail']) ? el('span', { class: 'muted' }, 'No phone or email in LCR') : null,
+        ]),
+      ]) : null,
       p.pending ? el('p', { class: 'muted small' }, 'Edited here · goes into the Google Sheet on the next sync') : null,
     ]);
     const tr = truthy(L['Temple Recommend Status']) ? L['Temple Recommend Status'] + (truthy(L['Temple Recommend Type']) ? ' · ' + (/proxy/i.test(L['Temple Recommend Type']) ? 'limited-use' : L['Temple Recommend Type'].toLowerCase()) : '') : (p.lcr ? 'None' : '');
@@ -333,11 +377,21 @@ window.NPCallings = (function () {
     return el('div', { class: 'slide' }, [head, el('div', { class: 'slide-grid' }, [el('div', { class: 'slide-col' }, [calling, about, attCard]), el('div', { class: 'slide-col' }, formCard)])]);
   }
   // ---------- editing the sheet columns ----------
-  const EDIT_COLS = [['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'input'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'input'], ['Other Notes', 'Other notes', 'textarea']];
+  const EDIT_COLS = [['Flag', 'Flag', 'select'], ['Other Notes', 'Other notes', 'textarea'], ['Proposed calling', 'Proposed calling', 'input'], ['text assignment / calling', 'Who texts', 'input'], ['texted', 'Texted', 'input'], ['answer', 'Answer', 'input'], ['sustained', 'Sustained', 'input'], ['Flag sent', 'Flag message sent', 'input']];
+  const FLAG_MEANING = {
+    Warning: 'attending here is optional — if they don\'t start coming, their records go back to their home ward.',
+    Magnet: 'came in without a new-member meeting — records are being sent back to their previous ward.',
+  };
   function editCalling(p, card) {
     const fields = EDIT_COLS.map(([key, label, kind]) => {
-      const input = el(kind, { class: 'edit-field', 'data-key': key, placeholder: label });
-      input.value = p.o[key] || '';
+      let input;
+      if (kind === 'select') {
+        input = el('select', { class: 'edit-field', 'data-key': key }, [el('option', { value: '' }, 'No flag'), el('option', { value: 'Warning' }, 'Warning — may be sent back if they don\'t attend'), el('option', { value: 'Magnet' }, 'Magnet — being sent back (no new-member meeting)')]);
+        input.value = p.flag || '';
+      } else {
+        input = el(kind, { class: 'edit-field', 'data-key': key, placeholder: label });
+        input.value = p.o[key] || '';
+      }
       return el('label', { class: 'edit-row' }, [el('span', {}, label), input]);
     });
     const msg = el('span', { class: 'muted' });
@@ -345,6 +399,8 @@ window.NPCallings = (function () {
       e.preventDefault();
       const values = {}; let changed = false;
       for (const f of form.querySelectorAll('.edit-field')) { const v = f.value.trim(); if (v !== (p.o[f.dataset.key] || '')) { values[f.dataset.key] = v; changed = true; } }
+      if (p.flagInferred && !('Flag' in values)) { values.Flag = p.flag; changed = true; }  // make the inferred flag real
+      if (p.flagInferred && values.Flag === p.flag && !('Other Notes' in values)) { const n = stripFlagWords(p.notes); if (n !== p.notes) values['Other Notes'] = n; }
       if (!changed) { cancel(); return; }
       msg.textContent = 'Saving…';
       try {
@@ -364,6 +420,67 @@ window.NPCallings = (function () {
     function cancel() { card.innerHTML = ''; prev.forEach(n => card.appendChild(n)); }
     card.innerHTML = ''; card.appendChild(el('h3', {}, 'Calling')); card.appendChild(form);
     form.querySelector('.edit-field').focus();
+  }
+
+  // "Warning / Move" -> "Move"; "Magnet" -> ""; the word moves into the Flag column
+  function stripFlagWords(notes) {
+    return String(notes || '').replace(/\b(warning|warming|magnet)\b/gi, '').replace(/\(\s*\)/g, '').replace(/\s*[\/,;|]\s*(?=[\/,;|]|$)/g, '').replace(/^\s*[\/,;|]\s*/, '').replace(/\s+/g, ' ').trim().replace(/^\((.*)\)$/, '$1').trim();
+  }
+  async function convertAllFlags() {
+    const todo = people.filter(p => p.flagInferred && !p.deleted);
+    if (!todo.length) { toast('Nothing to convert'); return; }
+    if (!confirm(`Move the word Warning / Magnet out of Other Notes and into the Flag column for ${todo.length} people? (Written to the sheet on the next sync.)`)) return;
+    let n = 0;
+    try {
+      for (const p of todo) {
+        const values = { Flag: p.flag }; const stripped = stripFlagWords(p.notes); if (stripped !== p.notes) values['Other Notes'] = stripped;
+        await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || (p.member && p.member.lcr_uuid) || null, p_values: values, p_by: null }); n++;
+      }
+    } catch (e) { toast('Stopped after ' + n + ': ' + e.message, 5000); }
+    edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() }); build(); renderList();
+    if (n) toast(`${n} flag${n === 1 ? '' : 's'} set — they go into the sheet on the next sync`);
+  }
+
+  async function setDeleted(p, del) {
+    try {
+      await rpc('admin_callings_delete', { p_pass: ctx.getPass(), p_name: p.sheetName, p_delete: del, p_by: null });
+      edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
+      build(); renderList(); if (!$('deck').hidden) { applyFilter(); deckAt = Math.min(deckAt, Math.max(0, view.length - 1)); if (view.length) renderDeck(); else closeDeck(); }
+      toast(del ? `${p.name} will be removed from the sheet on the next sync` : 'Delete undone');
+    } catch (e) { toast(/admin_callings_delete/.test(e.message) ? 'Run supabase/flags.sql in Supabase first' : 'Failed: ' + e.message, 4000); }
+  }
+
+  // Warning / Magnet message: templates live in Settings; the Apps Script web app sends the
+  // text (SimpleTexting) and the email, then the sent date is written to the sheet.
+  let templates = null;
+  async function loadTemplates() {
+    if (templates) return templates;
+    const rows = await rpc('admin_get_settings', { p_pass: ctx.getPass() });
+    templates = Object.fromEntries(rows.filter(r => r.key.startsWith('notify_')).map(r => [r.key, r.value]));
+    return templates;
+  }
+  function fill(tpl, p) { return String(tpl || '').replace(/\{first\}/g, p.name.split(' ')[0]).replace(/\{name\}/g, p.name); }
+  async function sendFlagMessage(p) {
+    const L = p.lcr || {};
+    const phone = (L['Individual Phone'] || '').replace(/\D/g, ''), email = L['Individual E-mail'] || '';
+    if (!phone && !email) { toast('No phone or email for them in LCR'); return; }
+    if (!C.sheetsRefreshUrl) { toast('Sending needs the Google script set up as a web app (steps 5–8 in scripts/announcements.gs)', 5000); return; }
+    let t; try { t = await loadTemplates(); } catch (e) { toast('Run supabase/flags.sql first'); return; }
+    const k = p.flag.toLowerCase();
+    const sms = phone ? fill(t['notify_' + k + '_sms'], p) : '', subject = email ? fill(t['notify_' + k + '_email_subject'], p) : '', body = email ? fill(t['notify_' + k + '_email'], p) : '';
+    if (!sms && !body) { toast('No message template saved yet — see Settings'); return; }
+    const preview = [phone ? `TEXT to ${L['Individual Phone']}:\n${sms}` : null, email ? `EMAIL to ${email}:\n${subject}\n\n${body}` : null].filter(Boolean).join('\n\n—————\n\n');
+    if (!confirm(`Send this to ${p.name}?\n\n${preview}`)) return;
+    try {
+      const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass: ctx.getPass(), name: p.name, phone, email, flag: p.flag, sms, subject, body, fromName: t.notify_from_name || '', replyTo: t.notify_reply_to || '' }) });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'send failed');
+      const today = new Date().toLocaleDateString('en-US', { timeZone: C.timeZone, month: 'numeric', day: 'numeric', year: 'numeric' });
+      await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: p.flag, 'Flag sent': today + (j.sms === 'sent' && j.email === 'sent' ? ' (text + email)' : j.sms === 'sent' ? ' (text)' : ' (email)') }, p_by: null });
+      edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
+      const keep = p.sheetName; build(); applyFilter(); const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; renderList(); renderDeck();
+      toast(`Sent${j.sms === 'sent' ? ' text' : ''}${j.sms === 'sent' && j.email === 'sent' ? ' and' : ''}${j.email === 'sent' ? ' email' : ''} to ${p.name}`);
+    } catch (e) { toast('Not sent: ' + e.message, 5000); }
   }
 
   function renderDeck() {
@@ -395,6 +512,7 @@ window.NPCallings = (function () {
       catch (e) { $('cal-list').innerHTML = ''; $('cal-list').appendChild(el('p', { class: 'notice' }, 'Run supabase/sheets.sql in Supabase first (' + e.message + ').')); loading = null; return; }
       sheets = Object.fromEntries(rows.map(r => [r.key, r]));
       try { edits = await rpc('admin_callings_edits', { p_pass: pass }); } catch (e) { edits = []; }
+      templates = null;
       attendance = new Map();
       try {
         for (const r of await rpc('admin_attendance_recent', { p_pass: pass, p_weeks: 8 })) {
