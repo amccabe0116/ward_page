@@ -261,29 +261,28 @@ window.NPCallings = (function () {
     const nPending = people.filter(p => p.pending && !p.deleted).length, nDel = people.filter(p => p.deleted).length;
     $('cal-meta').textContent = (ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '')) + (nPending ? ` · ${nPending} edit${nPending === 1 ? '' : 's'} waiting to go to the sheet` : '') + (nDel ? ` · ${nDel} row${nDel === 1 ? '' : 's'} to delete` : '');
     if (!view.length) { box.appendChild(el('p', { class: 'empty' }, people.length ? 'Nobody matches.' : 'No sheet data yet — run supabase/sheets.sql, then refresh the sheets.')); return; }
-    const wrap = el('div', { class: 'cal-scroll' });
-    const t = el('table', { class: 'grid cal-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, ''), el('th', {}, 'Flag'), el('th', {}, 'Other notes'), el('th', {}, 'Proposed calling'), el('th', {}, 'Who texts'), el('th', {}, 'Texted'), el('th', {}, 'Answer'), el('th', {}, filter === 'sheetOnly' ? '' : 'Last 4')])));
-    const tb = el('tbody');
+    // just the names and their tags — tap a row for the details (the slide)
+    const list = el('div', { class: 'cal-list' });
     view.forEach((p, vi) => {
       const st = status(p);
-      const last = (p.sheetOnly || p.deleted)
-        ? (p.deleted
-          ? el('span', { class: 'inline-actions' }, [el('span', { class: 'muted' }, p.pending ? 'coming off the sheet' : 'removed'), el('button', { class: 'chip', onclick: e => { e.stopPropagation(); setDeleted(p, false); } }, 'Undo')])
-          : el('button', { class: 'chip danger', title: 'Remove this row from the Google Sheet on the next sync', onclick: async e => { e.stopPropagation(); if (await ask(`Delete ${p.name} from the Members without Callings sheet?`)) setDeleted(p, true); } }, 'Delete'))
-        : (p.member && p.member.active ? attDots(p, 4) : el('span', { class: 'muted', title: p.member ? 'This record has left the ward since the sheet was made' : 'Not on the LCR roll any more' }, p.member ? 'moved out' : 'not in LCR'));
-      tb.appendChild(el('tr', { class: 'cal-row' + (p.deleted ? ' deleted' : ''), tabindex: 0, onclick: () => openDeck(vi), onkeydown: e => { if (e.key === 'Enter') openDeck(vi); } }, [
-        el('td', {}, [el('b', {}, p.name), el('div', { class: 'row-pills' }, [el('span', { class: 'pill ' + st.k }, st.t), sheetOnlyPill(p), p.section ? el('span', { class: 'pill new' }, 'new') : null, (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null, ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)), p.tag ? el('span', { class: 'pill off' }, p.tag) : null, p.pending ? el('span', { class: 'pill wait', title: 'Edited here; written to the Google Sheet on the next sync' }, '✎ pending') : null])]),
-        el('td', { class: 'muted nowrap' }, p.lcr ? [p.lcr.Age, p.lcr['Address - City']].filter(truthy).join(' · ') : [p.o.AGE, p.o.LOCATION].filter(truthy).join(' · ')),
-        el('td', { class: 'flag-cell' }, p.flag ? [flagPill(p), el('div', { class: 'muted small' }, sentLabel(p)), p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null] : null),
-        el('td', { class: 'notes-cell' }, p.notes),
-        el('td', {}, p.proposed),
-        el('td', {}, p.assignment),
-        el('td', { class: 'center' }, /^\s*y(es)?\s*$/i.test(p.texted) ? el('span', { class: 'tick', title: 'Texted' }, '✓') : p.texted),
-        el('td', {}, p.answer),
-        el('td', {}, last),
+      const pills = [
+        el('span', { class: 'pill ' + st.k }, st.t),
+        flagPill(p, { long: true }),
+        p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null,
+        ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
+        p.section ? el('span', { class: 'pill new' }, 'new') : null,
+        (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null,
+        sheetOnlyPill(p),
+        p.deleted ? el('span', { class: 'pill warn' }, 'Removed') : null,
+        p.pending && !p.deleted ? el('span', { class: 'pill wait' }, '✎ pending') : null,
+        (!p.sheetOnly && p.member && !p.member.active) ? el('span', { class: 'pill warn' }, 'Records moved out') : null,
+      ];
+      list.appendChild(el('button', { class: 'cal-item' + (p.deleted ? ' deleted' : ''), type: 'button', onclick: () => openDeck(vi) }, [
+        el('span', { class: 'cal-item-main' }, [el('b', {}, p.name), el('span', { class: 'row-pills' }, pills)]),
+        el('span', { class: 'cal-chev' }, '›'),
       ]));
     });
-    t.appendChild(tb); wrap.appendChild(t); box.appendChild(wrap);
+    box.appendChild(list);
   }
 
   // ---------- meeting deck ----------

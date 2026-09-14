@@ -287,6 +287,16 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .due-text { color: var(--danger); font-weight: 600; }
 .row-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .row-pills .pill { margin-left: 0; font-size: 11px; padding: 1px 7px; }
+.cal-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--card); overflow: hidden; }
+.cal-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); background: transparent; font: inherit; color: inherit; cursor: pointer; }
+.cal-item:last-child { border-bottom: 0; }
+.cal-item:hover, .cal-item:focus-visible { background: #f7f4ec; outline: none; }
+.cal-item-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cal-item-main b { font-size: 16px; }
+.cal-item .row-pills { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.cal-item .pill { white-space: nowrap; }
+.cal-item.deleted b { opacity: .5; text-decoration: line-through; }
+.cal-chev { color: var(--muted); font-size: 20px; line-height: 1; }
 .cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .cal-grid { min-width: 900px; }
 .cal-grid td { vertical-align: top; }
