@@ -261,7 +261,7 @@ window.NPCallings = (function () {
     const age = L.Age || o.AGE, city = L['Address - City'] ? L['Address - City'].replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase()) : o.LOCATION;
     const head = el('div', { class: 'slide-head' }, [
       el('h1', {}, p.name),
-      el('p', { class: 'slide-sub' }, [age ? age : null, city, truthy(L['Move In Date']) ? 'moved in ' + L['Move In Date'] : null, yes(L['Is Returned Missionary']) ? 'returned missionary' : null, yes(o.CAR) ? 'has a car' : (truthy(o.CAR) && /^n/i.test(o.CAR) ? 'no car' : null), truthy(o['LENGTH OF STAY']) ? 'here ' + o['LENGTH OF STAY'].replace(/^(for|until|till|thru|through)\s+/i, m => m.toLowerCase()) : null].filter(Boolean).join('  ·  ')),
+      el('p', { class: 'slide-sub' }, [age ? age : null, city, truthy(L['Move In Date']) ? 'moved in ' + L['Move In Date'] : null, yes(L['Is Returned Missionary']) ? 'returned missionary' : null, yes(o.CAR) ? 'has a car' : (truthy(o.CAR) && /^n/i.test(o.CAR) ? 'no car' : null)].filter(Boolean).join('  ·  ')),
       (truthy(L['Individual Phone']) || truthy(L['Individual E-mail'])) ? el('p', { class: 'slide-contact' }, [
         truthy(L['Individual Phone']) ? el('a', { href: 'tel:' + L['Individual Phone'].replace(/\D/g, '') }, L['Individual Phone']) : null,
         truthy(L['Individual Phone']) && truthy(L['Individual E-mail']) ? '  ·  ' : null,
@@ -285,7 +285,7 @@ window.NPCallings = (function () {
     ]);
     const tr = truthy(L['Temple Recommend Status']) ? L['Temple Recommend Status'] + (truthy(L['Temple Recommend Type']) ? ' · ' + (/proxy/i.test(L['Temple Recommend Type']) ? 'limited-use' : L['Temple Recommend Type'].toLowerCase()) : '') : (p.lcr ? 'None' : '');
     const aboutPairs = [['Temple recommend', tr], ['Ministering brothers', L['Ministering Brothers']], ['Ministering sisters', L['Ministering Sisters']], ['Has children', yes(L['Has Children']) ? 'Yes' : ''],
-      ['Why in Atlanta', o['PURPOSE IN ATL']], ['Mission', o.MISSION], ['Hobbies', o.HOBBIES], ['Music', o.MUSIC]];
+      ['Length of stay', o['LENGTH OF STAY']], ['Why in Atlanta', o['PURPOSE IN ATL']], ['Mission', o.MISSION], ['Hobbies', o.HOBBIES], ['Music', o.MUSIC]];
     const about = el('section', { class: 'slide-card' }, [
       el('h3', {}, 'About'),
       dl(aboutPairs),
