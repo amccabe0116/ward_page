@@ -7,6 +7,7 @@ index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
+keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
 admin.html          Leaders page: 12-hour login, overview, attendance by Sunday, inbox, announcements, callings meeting, members, settings
 overview.js         Leaders › Overview: roll size, men/women, moved in last 30 days, sacrament attendance, accepted-not-sustained
 callings.js         Leaders › Callings: the members-without-callings list + one-person-per-slide meeting deck
@@ -26,6 +27,7 @@ supabase/inbox.sql                editable announcements + Bishop meeting reques
 supabase/sheets.sql               mirrors the two leadership Google Sheets (callings doc, new-member form)
 supabase/edits.sql                site-side edits to the callings sheet, written back by the Apps Script
 supabase/flags.sql                Flag column (Warning/Magnet), row deletion, message templates
+supabase/keys.sql                 high-score board for the mini game (keys_submit / keys_top / admin_keys_delete)
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
