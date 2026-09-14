@@ -39,6 +39,7 @@
         <button class="tab on" data-pane="attendance">Attendance</button>
         <button class="tab" data-pane="notes">Inbox<span class="badge" id="notes-badge" hidden></span></button>
         <button class="tab" data-pane="announcements">Announcements</button>
+        <button class="tab" data-pane="callings">Callings</button>
         <button class="tab" data-pane="members">Members</button>
         <button class="tab" data-pane="sync">LCR</button>
         <button class="tab" data-pane="settings">Settings</button>
@@ -85,6 +86,23 @@
           <div class="field"><label>Flyers &amp; files</label><div class="ann-files" id="ann-files"></div></div>
           <div class="inline"><button class="btn small" id="ann-save">Save</button><button class="btn small secondary" id="ann-load-json">Start from what's on the site now</button><span class="muted" id="ann-msg"></span></div>
         </div>
+      </section>
+
+      <!-- Callings: members-without-callings meeting tool (callings.js) -->
+      <section class="pane" id="pane-callings">
+        <div class="inline cal-top">
+          <button class="btn small" id="cal-start">▶ Start meeting</button>
+          <input class="search" id="cal-search" type="search" placeholder="Find a name" style="max-width:240px;padding-left:40px">
+          <span class="muted" id="cal-meta" style="margin-left:auto"></span>
+        </div>
+        <div class="chips" id="cal-filters"></div>
+        <div id="cal-list" style="margin-top:12px"><p class="empty">Loading…</p></div>
+        <p class="muted cal-foot">
+          <a id="cal-open-sheet" href="#" target="_blank" rel="noopener" hidden>Open the callings sheet ↗</a>
+          <a id="cal-open-form" href="#" target="_blank" rel="noopener" hidden>Open the new-member responses ↗</a>
+          <button class="chip" id="cal-refresh">Refresh from Google Sheets</button>
+          <span>Click a row to open that person. In the meeting, use ← → (or swipe) to move through people; Esc closes.</span>
+        </p>
       </section>
 
       <!-- Members -->
@@ -141,8 +159,25 @@
     </div>
   </main>
 
+  <!-- Meeting deck: one person per screen -->
+  <div class="deck" id="deck" hidden>
+    <div class="deck-bar">
+      <span class="deck-pos" id="deck-pos"></span>
+      <span class="deck-filter muted" id="deck-filter"></span>
+      <select class="deck-jump" id="deck-jump" aria-label="Jump to a person"></select>
+      <button class="chip" id="deck-full" title="Fullscreen">⤢</button>
+      <button class="chip" id="deck-close">Close ✕</button>
+    </div>
+    <div class="deck-slide" id="deck-slide"></div>
+    <div class="deck-nav">
+      <button class="btn secondary" id="deck-prev">‹ Previous</button>
+      <button class="btn" id="deck-next">Next ›</button>
+    </div>
+  </div>
+
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="callings.js"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
@@ -158,7 +193,10 @@
         $('login').hidden = true; $('app').hidden = false;
         dates = await rpc('admin_meeting_dates', { p_pass: pass });
         await loadMembers(); await buildDates(); await loadAttendance(); loadNotesCount();
+        if (location.hash === '#callings') document.querySelector('.tab[data-pane=callings]').click();
       }
+      NPCallings.init({ getPass: () => pass, getMembers: () => members });
+      document.querySelector('.tab[data-pane=callings]').addEventListener('click', () => NPCallings.load());
       async function loginWithPassphrase(p) {
         $('login-msg').textContent = 'Checking…';
         try {

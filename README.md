@@ -7,7 +7,8 @@ index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
-admin.html          Leaders page: 12-hour login, attendance by Sunday, Housing & Jobs inbox, members, settings
+admin.html          Leaders page: 12-hour login, attendance by Sunday, inbox, announcements, callings meeting, members, settings
+callings.js         Leaders › Callings: the members-without-callings list + one-person-per-slide meeting deck
 config.js           Supabase URL / anon key (public by design)
 announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
@@ -19,6 +20,8 @@ supabase/guests.sql               guests/visitors table + functions (part of sch
 supabase/windows.sql              check-in time windows + settings (part of schema.sql too)
 supabase/notes.sql                notes to leadership + hardened Leaders login (part of schema.sql too)
 supabase/inbox.sql                editable announcements + Bishop meeting requests (part of schema.sql too)
+supabase/sheets.sql               mirrors the two leadership Google Sheets (callings doc, new-member form)
+scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
 ## How it fits together
@@ -37,6 +40,13 @@ supabase/inbox.sql                editable announcements + Bishop meeting reques
    from the page and clicks the attendance buttons for everyone who checked in on the site.
    Rows show as *synced* on the admin page once LCR has them. Guests stay on the site only —
    LCR's Visitors tab takes men/women totals, and the ward chose not to send those.
+4. **Leaders › Callings.** The "Members without Callings" Google Sheet and the "New Member
+   Form" responses are copied into the database (`sheets` table) by `syncMemberSheets` in
+   `scripts/announcements.gs` every 6 hours (or on demand with the Refresh button once the
+   script is deployed as a web app — `sheetsRefreshUrl` in `config.js`). `callings.js` matches
+   each person on the callings sheet to their form response and to the LCR roll, and shows the
+   list plus a meeting deck (one person per slide, ← → to move) for handing out assignments.
+   Read-only: edits still happen in the Google Sheet.
 
 ## Security model
 

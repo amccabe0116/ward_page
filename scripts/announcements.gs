@@ -19,6 +19,16 @@
  *   4. Triggers (clock icon) → Add trigger → publishAnnouncements · Time-driven ·
  *      Week timer · Every Sunday · 9pm to 10pm → Save.
  *
+ * Leaders › Callings (the members-without-callings meeting tool) — same project:
+ *   5. Function dropdown → `syncMemberSheets` → Run once (approve the Sheets permission). It
+ *      copies the "Members without Callings" doc and the "New Member Form (Responses)" sheet
+ *      into the site's database (needs SUPABASE_URL / SUPABASE_KEY / ADMIN_PASS from step 2).
+ *   6. Triggers → Add trigger → syncMemberSheets · Time-driven · Hour timer · Every 6 hours.
+ *   7. Optional "Refresh from Google Sheets" button on the Leaders page:
+ *      Deploy → New deployment → Web app · Execute as: Me · Who has access: Anyone → Deploy,
+ *      copy the web-app URL into `sheetsRefreshUrl` in config.js. The endpoint only does
+ *      anything when the Leaders passphrase is sent with the request.
+ *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
  * attachment as img/ann-<date>-N.<ext>, removes last week's files, writes announcements.json,
@@ -119,6 +129,78 @@ function publishAnnouncements() {
     thread.moveToArchive();
   }
   Logger.log('Published %s chars of text, %s images, %s files for %s.', text.length, images.length, files.length, stamp);
+}
+
+// ---------- Leaders › Callings: mirror the two leadership sheets into the database ----------
+
+// The sheets, by spreadsheet ID. `tab` is the sheet/tab name (null = first tab); `key` is what
+// the site reads (supabase/sheets.sql → admin_sheets).
+const MEMBER_SHEETS = [
+  { key: 'callings',            id: '1PMS3f4ncGaeIhJJ9ZaVAbOgA0kUTBnMOWgpvhKgMbe8', tab: null,                 title: 'Members without callings' },
+  { key: 'callings_committees', id: '1PMS3f4ncGaeIhJJ9ZaVAbOgA0kUTBnMOWgpvhKgMbe8', tab: 'Committee Requests', title: 'Committee requests' },
+  { key: 'newmember',           id: '1OyPHy_STcN-Nbh_OiPVIiSIu16cq1gxvs1ffzgePLlA', tab: 'Form Responses 1',   title: 'New member form' },
+];
+
+function syncMemberSheets() {
+  const props = PropertiesService.getScriptProperties();
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  if (!sbUrl || !sbKey || !adminPass) throw new Error('Set SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Project Settings → Script properties');
+  const result = {};
+  MEMBER_SHEETS.forEach(function (s) {
+    const ss = SpreadsheetApp.openById(s.id);
+    const sheet = s.tab ? ss.getSheetByName(s.tab) : ss.getSheets()[0];
+    if (!sheet) { Logger.log('Tab "%s" not found in %s — skipped', s.tab, ss.getName()); return; }
+    // Display values = exactly what leaders see in the sheet (dates as text, no formulas).
+    const values = sheet.getDataRange().getDisplayValues();
+    if (!values.length) return;
+    const headers = values[0].map(function (h) { return String(h || '').trim(); });
+    while (headers.length && !headers[headers.length - 1]) headers.pop();
+    const rows = [];
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i].slice(0, headers.length).map(function (v) { return String(v == null ? '' : v).trim(); });
+      while (r.length < headers.length) r.push('');
+      if (r.some(function (v) { return v; })) rows.push(r);
+    }
+    const url = 'https://docs.google.com/spreadsheets/d/' + s.id + '/edit#gid=' + sheet.getSheetId();
+    const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_replace_sheet', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey },
+      payload: JSON.stringify({ p_pass: adminPass, p_key: s.key, p_title: s.title, p_source_url: url, p_headers: headers, p_rows: rows, p_by: 'apps-script' }),
+    });
+    if (res.getResponseCode() >= 300) throw new Error(s.key + ': Supabase said ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
+    result[s.key] = rows.length;
+    Logger.log('%s: %s rows, %s columns', s.key, rows.length, headers.length);
+  });
+  return result;
+}
+
+// Web app entry point for the "Refresh from Google Sheets" button (see setup step 7).
+// Body: {"action":"sheets","pass":"<Leaders passphrase>"}  → {"ok":true,"callings":130,…}
+function doPost(e) {
+  const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
+    if (body.action !== 'sheets') return out({ ok: false, error: 'unknown action' });
+    const r = syncMemberSheets(); r.ok = true;
+    return out(r);
+  } catch (err) { return out({ ok: false, error: String(err && err.message || err) }); }
+}
+function doGet() { return ContentService.createTextOutput('ok'); }
+
+// The Leaders page sends its 12-hour session token, not the passphrase, so ask the database
+// whether it is valid (any admin function will do). The passphrase itself is accepted too.
+function isLeader_(pass) {
+  if (!pass) return false;
+  const props = PropertiesService.getScriptProperties();
+  if (pass === props.getProperty('ADMIN_PASS')) return true;
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY');
+  if (!sbUrl || !sbKey) return false;
+  const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_notes_count', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: pass }),
+  });
+  return res.getResponseCode() < 300;
 }
 
 // ---------- helpers ----------
