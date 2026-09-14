@@ -343,11 +343,22 @@ window.NPCallings = (function () {
       (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
       p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
         el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag]]),
-        el('div', { class: 'flag-actions' }, [
-          el('button', { class: 'chip', type: 'button', onclick: () => sendFlagMessage(p) }, (p.flagSent ? 'Send again' : 'Send the ' + p.flag.toLowerCase() + ' message') + (L['Individual Phone'] && L['Individual E-mail'] ? ' (text + email)' : L['Individual Phone'] ? ' (text)' : L['Individual E-mail'] ? ' (email)' : '')),
-          p.flag ? el('span', { class: p.due ? 'due-text' : 'muted' }, p.due ? `Sent ${p.sentDays} days ago — past the ${p.dueDays}-day mark, ready to move their records` : (p.sentDays !== null ? `Sent ${p.sentDays === 0 ? 'today' : p.sentDays === 1 ? 'yesterday' : p.sentDays + ' days ago'} · move records after ${p.dueDays} days` : (truthy(p.flagSent) ? 'Sent ' + p.flagSent : `Not sent yet · records move ${p.dueDays} days after sending`))) : null,
+        el('div', { class: 'flag-actions' }, (() => {
+          const sc = sentChannels(p), hasPhone = !!L['Individual Phone'], hasEmail = !!L['Individual E-mail'];
+          const missing = truthy(p.flagSent) ? [hasPhone && !sc.text ? 'text' : null, hasEmail && !sc.email ? 'email' : null].filter(Boolean) : [];
+          const avail = hasPhone && hasEmail ? ' (text + email)' : hasPhone ? ' (text)' : hasEmail ? ' (email)' : '';
+          const when = p.due ? `Sent ${p.sentDays} days ago — past the ${p.dueDays}-day mark, ready to move their records`
+            : p.sentDays !== null ? `Sent ${p.sentDays === 0 ? 'today' : p.sentDays === 1 ? 'yesterday' : p.sentDays + ' days ago'}${truthy(p.flagSent) && (sc.text !== sc.email) ? ` by ${sc.text ? 'text' : 'email'}` : ''} · move records after ${p.dueDays} days`
+            : truthy(p.flagSent) ? 'Sent ' + p.flagSent : `Not sent yet · records move ${p.dueDays} days after sending`;
+          return [
+            // the channel that hasn't gone out yet gets its own button; "Send again" resends everything
+            ...missing.map(ch => el('button', { class: 'chip', type: 'button', onclick: () => sendFlagMessage(p, ch) }, `Send the ${ch} too`)),
+            (hasPhone || hasEmail) ? el('button', { class: 'chip' + (missing.length ? ' secondary' : ''), type: 'button', onclick: () => sendFlagMessage(p) }, (truthy(p.flagSent) ? 'Send again' : 'Send the ' + p.flag.toLowerCase() + ' message') + avail) : null,
+            el('span', { class: p.due ? 'due-text' : 'muted' }, when + (missing.length ? ` · ${missing.join(' and ')} not sent yet` : '')),
+          ];
+        })().concat([
           (!L['Individual Phone'] && !L['Individual E-mail']) ? el('span', { class: 'muted' }, 'No phone or email in LCR') : null,
-        ]),
+        ])),
       ]) : null,
       p.pending ? el('p', { class: 'muted small' }, savingToSheet.has(p.sheetName) ? 'Saving to the Google Sheet…' : C.sheetsRefreshUrl ? 'Edited here · not in the Google Sheet yet — Save to sheet, or it goes in with the next sync' : 'Edited here · goes into the Google Sheet on the next sync') : null,
     ]);
@@ -478,10 +489,19 @@ window.NPCallings = (function () {
     return templates;
   }
   function fill(tpl, p) { return String(tpl || '').replace(/\{first\}/g, p.name.split(' ')[0]).replace(/\{name\}/g, p.name); }
-  async function sendFlagMessage(p) {
+  // What the "Flag sent" cell says went out: "9/13/2026 (email)", "9/13/2026 (text + email)",
+  // "9/13/2026 (email) · 9/16/2026 (text)" (the other channel sent later). A bare date counts as both.
+  function sentChannels(p) {
+    const v = String(p.flagSent || '');
+    if (!v.trim()) return { text: false, email: false };
+    const named = /\b(text|email)\b/i.test(v);
+    return { text: !named || /\btext\b/i.test(v), email: !named || /\bemail\b/i.test(v) };
+  }
+  // only: 'text' | 'email' sends just that channel (the one that hasn't gone out yet); otherwise everything LCR has.
+  async function sendFlagMessage(p, only) {
     const L = p.lcr || {};
-    const phone = (L['Individual Phone'] || '').replace(/\D/g, ''), email = L['Individual E-mail'] || '';
-    if (!phone && !email) { toast('No phone or email for them in LCR'); return; }
+    const phone = only === 'email' ? '' : (L['Individual Phone'] || '').replace(/\D/g, ''), email = only === 'text' ? '' : (L['Individual E-mail'] || '');
+    if (!phone && !email) { toast(only ? `No ${only === 'text' ? 'phone' : 'email'} for them in LCR` : 'No phone or email for them in LCR'); return; }
     if (!C.sheetsRefreshUrl) { toast('Sending needs the Google script set up as a web app (steps 5–8 in scripts/announcements.gs)', 5000); return; }
     let t; try { t = await loadTemplates(); } catch (e) { toast('Run supabase/flags.sql first'); return; }
     const k = p.flag.toLowerCase();
@@ -494,8 +514,10 @@ window.NPCallings = (function () {
       const j = await r.json();
       const sentSms = j.sms === 'sent', sentEmail = j.email === 'sent';
       if (!sentSms && !sentEmail) throw new Error(j.error || 'send failed');  // one channel is enough to count as sent
-      const today = todayMDY();
-      await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: p.flag, 'Flag sent': today + (j.sms === 'sent' && j.email === 'sent' ? ' (text + email)' : j.sms === 'sent' ? ' (text)' : ' (email)') }, p_by: null });
+      const today = todayMDY(), now = today + (sentSms && sentEmail ? ' (text + email)' : sentSms ? ' (text)' : ' (email)');
+      // sending the channel that was still missing keeps the first date (the move-out countdown runs from it)
+      const before = sentChannels(p), addsOther = truthy(p.flagSent) && ((sentSms && !before.text && before.email) || (sentEmail && !before.email && before.text)) && !(before.text && before.email);
+      await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: p.flag, 'Flag sent': addsOther ? p.flagSent + ' · ' + now : now }, p_by: null });
       edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
       const keep = p.sheetName; build(); applyFilter(); const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; renderList(); renderDeck();
       saveToSheet(p, null, true);

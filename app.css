@@ -307,6 +307,7 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .flag-box.flag { background: #fde8e8; color: #7a1f1f; }
 .flag-box.magnet { background: #ede7f6; color: #3b2470; }
 .flag-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.flag-actions .chip.secondary { background: transparent; color: var(--muted); }
 .tpl-title { font-family: var(--serif); font-size: 17px; margin: 16px 0 4px; }
 textarea.tpl { min-height: 90px; }
 textarea.tpl.tall { min-height: 200px; }
