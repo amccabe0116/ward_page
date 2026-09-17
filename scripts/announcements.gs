@@ -35,6 +35,13 @@
  *   8. Texts: Script properties → SIMPLETEXTING_KEY = an API key from SimpleTexting
  *      (Settings → API), and SIMPLETEXTING_NUMBER = the ward texting number (digits only).
  *      Emails go from this Google account (GmailApp); the wording lives under Leaders › Settings.
+ *   9. Text list sync (members → SimpleTexting): the Sunday LCR sync copies the ward member list
+ *      into the site (sheet key `lcr_members`, via scripts/lcr-report.js). `syncTextList` then
+ *      adds every member with a mobile number to the SimpleTexting list named in Script property
+ *      SIMPLETEXTING_LIST (default "North Point Ward - Notifications"). It runs at the end of every
+ *      syncMemberSheets run and from Leaders › Settings → "Sync now". It never re-adds anyone
+ *      who replied STOP, and only removes people it added itself (comment "LCR sync") when they
+ *      leave the roster — and only if SIMPLETEXTING_REMOVE_MOVED_OUT = true.
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -157,7 +164,99 @@ function syncMemberSheets() {
   try { result.written = writePendingEdits_(sbUrl, sbKey, adminPass); } catch (e) { Logger.log('Writing edits failed: %s', e && e.message); result.writeError = String(e && e.message); }
 
   MEMBER_SHEETS.forEach(function (s) { result[s.key] = pullSheet_(s, sbUrl, sbKey, adminPass); });
+  // 2. members → the SimpleTexting list (only when the token is set up)
+  if (props.getProperty('SIMPLETEXTING_KEY')) {
+    try { result.textList = syncTextList(); } catch (e) { Logger.log('Text list sync failed: %s', e && e.message); result.textListError = String(e && e.message); }
+  }
   return result;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Members → SimpleTexting list. Source: the `lcr_members` sheet copy the Sunday sync stores
+// (LCR's member list with a phone column). Returns a summary that is also saved under the
+// site setting `textlist_last_sync` so Leaders › Settings can show it.
+function syncTextList() {
+  const props = PropertiesService.getScriptProperties();
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  const key = props.getProperty('SIMPLETEXTING_KEY');
+  const listName = props.getProperty('SIMPLETEXTING_LIST') || 'North Point Ward - Notifications';
+  const removeMovedOut = String(props.getProperty('SIMPLETEXTING_REMOVE_MOVED_OUT') || '').toLowerCase() === 'true';
+  if (!sbUrl || !sbKey || !adminPass) throw new Error('Set SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Script properties');
+  if (!key) throw new Error('SIMPLETEXTING_KEY is not set in Script properties');
+  const ST = 'https://api-app2.simpletexting.com/v2/api';
+  const stFetch = function (path, method, payload) {
+    const r = UrlFetchApp.fetch(ST + path, { method: method || 'get', contentType: 'application/json', muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + key }, payload: payload ? JSON.stringify(payload) : undefined });
+    const code = r.getResponseCode(), text = r.getContentText();
+    if (code >= 300) throw new Error('SimpleTexting ' + method + ' ' + path + ' → ' + code + ' ' + text.slice(0, 160));
+    return text ? JSON.parse(text) : null;
+  };
+  const digits10 = function (v) { let d = String(v || '').replace(/\D/g, ''); if (d.length === 11 && d[0] === '1') d = d.slice(1); return d.length === 10 ? d : ''; };
+  const summary = { list: listName, members: 0, withPhone: 0, added: 0, addedToList: 0, alreadyOnList: 0, optedOut: 0, removed: 0, noPhone: [], errors: [], at: new Date().toISOString() };
+
+  // 1. the member list the site holds (copied from LCR by the Sunday sync)
+  const sr = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_sheets', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass }) });
+  if (sr.getResponseCode() >= 300) throw new Error('admin_sheets ' + sr.getResponseCode());
+  const sheet = JSON.parse(sr.getContentText()).filter(function (x) { return x.key === 'lcr_members'; })[0];
+  if (!sheet) throw new Error('No member list on the site yet — run scripts/lcr-report.js on LCR\'s member list (key lcr_members) first');
+  const h = sheet.headers, col = function (re) { for (let i = 0; i < h.length; i++) if (re.test(h[i])) return i; return -1; };
+  const iName = col(/^(preferred )?name$/i), iPhone = col(/phone/i), iUuid = col(/uuid/i);
+  if (iName < 0 || iPhone < 0) throw new Error('lcr_members needs a Name and a Phone column (has: ' + h.join(', ') + ')');
+  const members = [];
+  sheet.rows.forEach(function (r) {
+    const name = String(r[iName] || '').replace(/^Warning/, '').trim(); if (!name) return;
+    summary.members++;
+    const phone = digits10(r[iPhone]);
+    if (!phone) { summary.noPhone.push(name); return; }
+    summary.withPhone++;
+    const parts = name.split(','); const last = (parts[0] || '').trim(); const first = (parts[1] || '').trim().split(/\s+/)[0] || '';
+    members.push({ name: name, first: first, last: last, phone: phone, uuid: iUuid >= 0 ? r[iUuid] : '' });
+  });
+  summary.membersUpdatedAt = sheet.updated_at;
+
+  // 2. everything SimpleTexting has (paged)
+  const contacts = {};
+  for (let page = 0; page < 40; page++) {
+    const pg = stFetch('/contacts?page=' + page + '&size=500');
+    (pg.content || []).forEach(function (c) { const d = digits10(c.contactPhone); if (d) contacts[d] = c; });
+    if (!pg.content || pg.content.length < 500) break;
+  }
+  const onList = function (c) { return (c.lists || []).some(function (l) { return l && (l.name === listName || l.listId === listName || l.id === listName); }); };
+
+  // 3. add what's missing — never anyone who opted out
+  const toCreate = [];
+  members.forEach(function (m) {
+    const c = contacts[m.phone];
+    if (!c) { toCreate.push({ contactPhone: m.phone, firstName: m.first, lastName: m.last, comment: 'LCR sync', listIds: [listName] }); return; }
+    if (String(c.subscriptionStatus || '').toUpperCase().indexOf('OPT_OUT') === 0 || /UNSUB/i.test(c.subscriptionStatus || '')) { summary.optedOut++; return; }
+    if (onList(c)) { summary.alreadyOnList++; return; }
+    try { stFetch('/contact-lists/' + encodeURIComponent(listName) + '/contacts', 'post', { contactPhoneOrId: m.phone }); summary.addedToList++; }
+    catch (e) { summary.errors.push(m.name + ': ' + e.message); }
+  });
+  for (let i = 0; i < toCreate.length; i += 100) {
+    const chunk = toCreate.slice(i, i + 100);
+    try { stFetch('/contacts-batch/batch-update', 'post', { listsReplacement: false, updates: chunk }); summary.added += chunk.length; }
+    catch (e) {  // fall back to one at a time so one bad number doesn't block the rest
+      chunk.forEach(function (u) { try { stFetch('/contacts?upsert=true&listsReplacement=false', 'post', u); summary.added++; } catch (e2) { summary.errors.push(u.firstName + ' ' + u.lastName + ': ' + e2.message); } });
+    }
+  }
+
+  // 4. optionally take people we added off the list once they leave the roster
+  if (removeMovedOut) {
+    const roster = {}; members.forEach(function (m) { roster[m.phone] = true; });
+    Object.keys(contacts).forEach(function (d) {
+      const c = contacts[d];
+      if (roster[d] || !onList(c) || String(c.comment || '').indexOf('LCR sync') < 0) return;
+      try { stFetch('/contact-lists/' + encodeURIComponent(listName) + '/contacts/' + d, 'delete'); summary.removed++; }
+      catch (e) { summary.errors.push((c.firstName || '') + ' ' + (c.lastName || '') + ': ' + e.message); }
+    });
+  }
+  summary.noPhoneCount = summary.noPhone.length; summary.noPhone = summary.noPhone.slice(0, 40);
+  Logger.log('Text list: %s', JSON.stringify(summary));
+  // remember the result for the Leaders page
+  try {
+    UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_set_setting', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass, p_key: 'textlist_last_sync', p_value: JSON.stringify(summary) }) });
+  } catch (e) { Logger.log('could not save summary: %s', e && e.message); }
+  return summary;
 }
 
 // One Google Sheet tab → the `sheets` table (display values = exactly what leaders see: dates as
@@ -258,12 +357,14 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   sheets → write every pending edit to the callings sheet, then re-copy all sheets  {"ok":true,"written":2,"callings":130,…}
 //   save   → one person's pending edits ("name") to the sheet, re-copy the callings sheet
 //   notify → send a Warning / Magnet text + email (sendFlagMessage_)
+//   textlist → add members to the SimpleTexting list now (syncTextList)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
     if (body.action === 'notify') return out(sendFlagMessage_(body));
+    if (body.action === 'textlist') { const r = syncTextList(); r.ok = true; return out(r); }
     if (body.action === 'save') {  // one person's edits → the sheet now (the "Save to sheet" button on a slide)
       const props = PropertiesService.getScriptProperties();
       const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');

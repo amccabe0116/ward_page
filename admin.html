@@ -210,6 +210,12 @@
             </div>
             <p class="muted" id="t-msg" style="margin:6px 0 0"></p>
           </details>
+          <details style="margin-top:10px">
+            <summary class="muted">Text list sync (members → SimpleTexting)</summary>
+            <p class="muted" style="margin:8px 0">Every member on the ward list with a mobile number is added to the SimpleTexting list. It runs after each sheet sync (every 6 hours) and never re-adds anyone who replied STOP. The member list itself comes from LCR with the Sunday sync.</p>
+            <div class="inline"><button class="btn small secondary" id="tl-sync">Sync now</button><span class="muted" id="tl-msg"></span></div>
+            <p class="muted small" id="tl-last" style="margin:8px 0 0"></p>
+          </details>
         </div>
       </section>
     </div>
@@ -498,6 +504,7 @@
         [$('w-prs-start').value, $('w-prs-end').value] = split(get('window_priesthood_rs') || '13:20-14:30');
         $('w-day').value = get('window_day') || '0';
         $('w-enforce').checked = (get('roll_enforce_window') || 'true') === 'true';
+        showTextListSummary(get('textlist_last_sync'));
         for (const [id, key] of TPL) $(id).value = get(key) || '';
         $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
@@ -511,6 +518,23 @@
         finally { $('t-send').disabled = false; }
       });
       try { $('t-phone').value = localStorage.getItem('np_test_phone') || ''; } catch (e) {}
+      // text list sync: last result + "Sync now"
+      function showTextListSummary(raw) {
+        const box = $('tl-last'); if (!raw) { box.textContent = 'No sync yet.'; return; }
+        let r; try { r = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { box.textContent = raw; return; }
+        const when = r.at ? new Date(r.at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        box.textContent = `Last sync ${when}: ${r.members} on the member list, ${r.withPhone} with a mobile number · ${r.added} added, ${r.addedToList} put on the list, ${r.alreadyOnList} already there, ${r.optedOut} opted out (left alone)` + (r.removed ? `, ${r.removed} removed` : '') + (r.noPhoneCount ? ` · ${r.noPhoneCount} without a number` : '') + (r.errors && r.errors.length ? ` · ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}: ${r.errors.slice(0, 3).join('; ')}` : '') + (r.membersUpdatedAt ? ` · member list from ${new Date(r.membersUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : '');
+      }
+      $('tl-sync').addEventListener('click', async () => {
+        const msg = $('tl-msg'); $('tl-sync').disabled = true; msg.textContent = 'Syncing… (30–60 s)';
+        try {
+          if (!C.sheetsRefreshUrl) throw new Error('the Google script web app URL is not set');
+          const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'textlist', pass }) });
+          const j = await r.json(); if (!j.ok) throw new Error(j.error || 'sync failed');
+          msg.textContent = 'Done.'; showTextListSummary(j);
+        } catch (e) { msg.textContent = 'Not synced: ' + e.message; }
+        finally { $('tl-sync').disabled = false; }
+      });
       $('n-save').addEventListener('click', async () => {
         try {
           for (const [id, key] of TPL) await rpc('admin_set_setting', { p_pass: pass, p_key: key, p_value: $(id).value });

@@ -83,6 +83,12 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    callings sheet who accepted but hasn't been sustained. The two LCR copies are part of the
    Sunday sync (`scripts/jobs.md`).
 
+6. **Text list.** The Sunday sync also copies LCR's member list (with phone numbers) in as sheet
+   `lcr_members`; `syncTextList` in `scripts/announcements.gs` adds every member with a mobile
+   number to the SimpleTexting list (`SIMPLETEXTING_LIST`, default "North Point Ward -
+   Notifications"), skips anyone who opted out, and can optionally drop people it added once
+   they leave the roster. Runs after each sheet sync and from Leaders › Settings → Sync now.
+
 ## Security model
 
 - The public key in `config.js` can only call the functions granted to `anon` — roll lookups,
