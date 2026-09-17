@@ -7,6 +7,8 @@ index.html          landing: two class buttons + this week's announcements
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
+terms.html          Terms of Service (text-list program terms; required by SimpleTexting) — not linked from the site
+privacy.html        Privacy Policy (what the site and text list collect) — not linked from the site
 keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
 admin.html          Leaders page: 12-hour login, overview, attendance by Sunday, inbox, announcements, callings meeting, members, settings
 overview.js         Leaders › Overview: roll size, men/women, moved in last 30 days, sacrament attendance, accepted-not-sustained
