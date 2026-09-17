@@ -658,5 +658,13 @@ window.NPCallings = (function () {
     const at = view.findIndex(x => x.sheetName === sheetName);
     if (at >= 0) openDeck(at); else toast('Not on the list any more');
   }
-  return { init, load, refresh: () => load(true), data, openPerson, isTicked };
+  // Settings → "Send me a test text": just the SMS leg, to check the SimpleTexting token
+  async function sendTestText(phone, text) {
+    if (!C.sheetsRefreshUrl) throw new Error('the Google script web app URL is not set (config.js)');
+    const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', test: true, pass: ctx.getPass(), name: 'test', phone: String(phone).replace(/\D/g, ''), email: '', flag: 'Test', sms: text, subject: '', body: '' }) });
+    const j = await r.json();
+    if (j.sms !== 'sent') throw new Error(j.error || 'text not sent');
+    return j;
+  }
+  return { init, load, refresh: () => load(true), data, openPerson, isTicked, sendTestText };
 })();

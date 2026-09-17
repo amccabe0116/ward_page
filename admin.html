@@ -201,6 +201,15 @@
           <div class="field"><label for="n-magnet-subject">Email subject</label><input id="n-magnet-subject" type="text"></div>
           <div class="field"><label for="n-magnet-email">Email</label><textarea id="n-magnet-email" class="tpl tall"></textarea></div>
           <div class="inline" style="margin-top:12px"><button class="btn small" id="n-save">Save messages</button><span class="muted" id="n-msg"></span></div>
+          <details style="margin-top:14px">
+            <summary class="muted">Check texting (SimpleTexting)</summary>
+            <p class="muted" style="margin:8px 0">Sends one short text through the Google script so you can confirm the SimpleTexting token works, without messaging a member.</p>
+            <div class="inline">
+              <div class="field" style="margin:0;flex:1"><label for="t-phone">Your cell</label><input id="t-phone" type="tel" placeholder="(770) 555-1234" autocomplete="tel"></div>
+              <button class="btn small secondary" id="t-send" style="align-self:flex-end">Send me a test text</button>
+            </div>
+            <p class="muted" id="t-msg" style="margin:6px 0 0"></p>
+          </details>
         </div>
       </section>
     </div>
@@ -224,7 +233,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=16"></script>
+  <script src="callings.js?v=17"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -493,6 +502,15 @@
         $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
       const TPL = [['n-from', 'notify_from_name'], ['n-reply', 'notify_reply_to'], ['n-due-warning', 'flag_due_days_warning'], ['n-due-magnet', 'flag_due_days_magnet'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
+      $('t-send').addEventListener('click', async () => {
+        const phone = $('t-phone').value.replace(/\D/g, ''); const msg = $('t-msg');
+        if (phone.length < 10) { msg.textContent = 'Type a 10-digit cell number first.'; return; }
+        $('t-send').disabled = true; msg.textContent = 'Sending…';
+        try { await NPCallings.sendTestText(phone, 'Test from northpointysa.com — texting is set up. (North Point YSA)'); msg.textContent = 'Sent — check your phone.'; try { localStorage.setItem('np_test_phone', $('t-phone').value); } catch (e) {} }
+        catch (e) { msg.textContent = 'Not sent: ' + e.message; }
+        finally { $('t-send').disabled = false; }
+      });
+      try { $('t-phone').value = localStorage.getItem('np_test_phone') || ''; } catch (e) {}
       $('n-save').addEventListener('click', async () => {
         try {
           for (const [id, key] of TPL) await rpc('admin_set_setting', { p_pass: pass, p_key: key, p_value: $(id).value });

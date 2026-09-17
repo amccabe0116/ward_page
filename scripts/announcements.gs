@@ -280,9 +280,11 @@ function doPost(e) {
 function doGet() { return ContentService.createTextOutput('ok'); }
 
 // Warning / Magnet message from a person's slide: a text through SimpleTexting (script
-// property SIMPLETEXTING_KEY = an API key from SimpleTexting → Settings → API; optional
-// SIMPLETEXTING_NUMBER = the ward's texting number, digits only) and/or an email from this
-// Google account. The page sends the already-filled-in wording, so it is exactly what the leader
+// property SIMPLETEXTING_KEY = the API token from SimpleTexting → Settings → API — the API is
+// enabled per account by SimpleTexting support; optional SIMPLETEXTING_NUMBER = the ward's
+// texting number, digits only, when it isn't the account's primary number) and/or an email
+// from this Google account. A "test" body ({ action: 'notify', test: true, phone, sms }) sends
+// just the text — the Settings page uses it to check the token. The page sends the already-filled-in wording, so it is exactly what the leader
 // saw in the confirmation box. Returns { ok, sms: 'sent'|'skipped'|'failed', email: … }.
 function sendFlagMessage_(b) {
   const props = PropertiesService.getScriptProperties();
@@ -292,7 +294,9 @@ function sendFlagMessage_(b) {
     const key = props.getProperty('SIMPLETEXTING_KEY');
     if (!key) { res.sms = 'skipped'; res.error = 'no SimpleTexting key yet (SIMPLETEXTING_KEY in Script properties)'; }
     else {
-      const payload = { contactPhone: phone.length === 10 ? '1' + phone : phone, mode: 'AUTO', text: b.sms };
+      // SimpleTexting wants a 10-digit US number ("3051234567"); drop a leading 1 if LCR gave 11 digits
+      const digits = phone.length === 11 && phone[0] === '1' ? phone.slice(1) : phone;
+      const payload = { contactPhone: digits, mode: 'AUTO', text: b.sms };
       const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
       const r = UrlFetchApp.fetch('https://api-app2.simpletexting.com/v2/api/messages', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
