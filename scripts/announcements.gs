@@ -35,13 +35,14 @@
  *   8. Texts: Script properties → SIMPLETEXTING_KEY = an API key from SimpleTexting
  *      (Settings → API), and SIMPLETEXTING_NUMBER = the ward texting number (digits only).
  *      Emails go from this Google account (GmailApp); the wording lives under Leaders › Settings.
- *   9. Text list sync (members → SimpleTexting): the Sunday LCR sync copies the ward member list
- *      into the site (sheet key `lcr_members`, via scripts/lcr-report.js). `syncTextList` then
- *      adds every member with a mobile number to the SimpleTexting list named in Script property
- *      SIMPLETEXTING_LIST (default "North Point Ward - Notifications"). It runs at the end of every
- *      syncMemberSheets run and from Leaders › Settings → "Sync now". It never re-adds anyone
- *      who replied STOP, and only removes people it added itself (comment "LCR sync") when they
- *      leave the roster — and only if SIMPLETEXTING_REMOVE_MOVED_OUT = true.
+ *   9. Text list sync (new member form → SimpleTexting): `syncTextList` reads the "New Member
+ *      Form" responses and adds only the people who ticked "agree" on the form's
+ *      "Automated Messages - Terms and conditions" question (and gave a mobile number) to the
+ *      SimpleTexting list named in Script property SIMPLETEXTING_LIST (default "North Point Ward -
+ *      Notifications"). The form timestamp goes into the contact's comment as the consent record.
+ *      It runs at the end of every syncMemberSheets run and from Leaders › Settings → "Sync now".
+ *      It never re-adds anyone who replied STOP and never removes anyone; a later form response
+ *      that says "Opt out" cancels an earlier "agree" from the same number.
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -164,7 +165,7 @@ function syncMemberSheets() {
   try { result.written = writePendingEdits_(sbUrl, sbKey, adminPass); } catch (e) { Logger.log('Writing edits failed: %s', e && e.message); result.writeError = String(e && e.message); }
 
   MEMBER_SHEETS.forEach(function (s) { result[s.key] = pullSheet_(s, sbUrl, sbKey, adminPass); });
-  // 2. members → the SimpleTexting list (only when the token is set up)
+  // 2. form opt-ins → the SimpleTexting list (only when the token is set up)
   if (props.getProperty('SIMPLETEXTING_KEY')) {
     try { result.textList = syncTextList(); } catch (e) { Logger.log('Text list sync failed: %s', e && e.message); result.textListError = String(e && e.message); }
   }
@@ -172,15 +173,18 @@ function syncMemberSheets() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Members → SimpleTexting list. Source: the `lcr_members` sheet copy the Sunday sync stores
-// (LCR's member list with a phone column). Returns a summary that is also saved under the
-// site setting `textlist_last_sync` so Leaders › Settings can show it.
+// New member form → SimpleTexting list. Only people who ticked "agree" on the form's
+// "Automated Messages - Terms and conditions" question (and gave a mobile number) are added; the
+// form timestamp is kept in the contact's comment as the consent record. Nobody is removed here
+// (STOP replies are SimpleTexting's job), and a later "Opt out" response from the same number
+// cancels an earlier "agree". Returns a summary that is also saved under the site setting
+// `textlist_last_sync` so Leaders › Settings can show it.
+const TEXT_OPTIN_COLUMN = /automated messages|terms and conditions|text messag|\bsms\b|opt[ -]?in/i;
 function syncTextList() {
   const props = PropertiesService.getScriptProperties();
   const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
   const key = props.getProperty('SIMPLETEXTING_KEY');
   const listName = props.getProperty('SIMPLETEXTING_LIST') || 'North Point Ward - Notifications';
-  const removeMovedOut = String(props.getProperty('SIMPLETEXTING_REMOVE_MOVED_OUT') || '').toLowerCase() === 'true';
   if (!sbUrl || !sbKey || !adminPass) throw new Error('Set SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Script properties');
   if (!key) throw new Error('SIMPLETEXTING_KEY is not set in Script properties');
   const ST = 'https://api-app2.simpletexting.com/v2/api';
@@ -191,27 +195,39 @@ function syncTextList() {
     return text ? JSON.parse(text) : null;
   };
   const digits10 = function (v) { let d = String(v || '').replace(/\D/g, ''); if (d.length === 11 && d[0] === '1') d = d.slice(1); return d.length === 10 ? d : ''; };
-  const summary = { list: listName, members: 0, withPhone: 0, added: 0, addedToList: 0, alreadyOnList: 0, optedOut: 0, removed: 0, noPhone: [], errors: [], at: new Date().toISOString() };
+  const summary = { list: listName, responses: 0, answered: 0, optedIn: 0, declined: 0, added: 0, addedToList: 0, alreadyOnList: 0, optedOut: 0, noPhone: [], errors: [], at: new Date().toISOString() };
 
-  // 1. the member list the site holds (copied from LCR by the Sunday sync)
-  const sr = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_sheets', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass }) });
-  if (sr.getResponseCode() >= 300) throw new Error('admin_sheets ' + sr.getResponseCode());
-  const sheet = JSON.parse(sr.getContentText()).filter(function (x) { return x.key === 'lcr_members'; })[0];
-  if (!sheet) throw new Error('No member list on the site yet — run scripts/lcr-report.js on LCR\'s member list (key lcr_members) first');
-  const h = sheet.headers, col = function (re) { for (let i = 0; i < h.length; i++) if (re.test(h[i])) return i; return -1; };
-  const iName = col(/^(preferred )?name$/i), iPhone = col(/phone/i), iUuid = col(/uuid/i);
-  if (iName < 0 || iPhone < 0) throw new Error('lcr_members needs a Name and a Phone column (has: ' + h.join(', ') + ')');
-  const members = [];
-  sheet.rows.forEach(function (r) {
-    const name = String(r[iName] || '').replace(/^Warning/, '').trim(); if (!name) return;
-    summary.members++;
-    const phone = digits10(r[iPhone]);
-    if (!phone) { summary.noPhone.push(name); return; }
-    summary.withPhone++;
-    const parts = name.split(','); const last = (parts[0] || '').trim(); const first = (parts[1] || '').trim().split(/\s+/)[0] || '';
-    members.push({ name: name, first: first, last: last, phone: phone, uuid: iUuid >= 0 ? r[iUuid] : '' });
+  // 1. the form responses, straight from the sheet (so "Sync now" sees today's sign-ups)
+  const form = MEMBER_SHEETS.filter(function (s) { return s.key === 'newmember'; })[0];
+  const ss = SpreadsheetApp.openById(form.id);
+  const tab = form.tab ? ss.getSheetByName(form.tab) : ss.getSheets()[0];
+  if (!tab) throw new Error('Tab "' + form.tab + '" not found in the New Member Form responses');
+  const values = tab.getDataRange().getDisplayValues();
+  const h = (values[0] || []).map(function (x) { return String(x || '').trim(); });
+  const col = function (re) { for (let i = 0; i < h.length; i++) if (re.test(h[i])) return i; return -1; };
+  const iFirst = col(/^first name/i), iLast = col(/^last name/i), iPhone = col(/phone/i), iWhen = col(/^timestamp/i), iOpt = col(TEXT_OPTIN_COLUMN);
+  if (iOpt < 0) throw new Error('The form responses have no "Automated Messages - Terms and conditions" column yet — add the opt-in question to the New Member Form first (columns: ' + h.join(', ') + ')');
+  if (iFirst < 0 || iPhone < 0) throw new Error('The form responses need a First Name and a Phone Number column (columns: ' + h.join(', ') + ')');
+  // "agree" (the form's checkbox label) counts; "Opt out", "no" or both boxes ticked don't
+  const agreed = function (v) { v = String(v || '').trim(); return /\bagree\b|^y(es)?$/i.test(v) && !/opt.?out|\bno\b|disagree/i.test(v); };
+  const when = function (r) { const d = iWhen >= 0 ? new Date(r[iWhen]) : null; return d && !isNaN(d) ? d.getTime() : 0; };
+  // the latest response per number decides
+  const byPhone = {}, noPhone = {};
+  values.slice(1).forEach(function (r, idx) {
+    const first = String(r[iFirst] || '').trim(), last = iLast >= 0 ? String(r[iLast] || '').trim() : '';
+    if (!first && !last) return;
+    summary.responses++;
+    const answer = String(r[iOpt] || '').trim(); if (!answer) return;   // filled in before the question existed
+    summary.answered++;
+    const yes = agreed(answer), phone = digits10(r[iPhone]), name = (first + ' ' + last).trim();
+    if (!phone) { if (yes) noPhone[name] = true; return; }
+    const t = when(r) || idx;
+    if (byPhone[phone] && byPhone[phone].t > t) return;
+    byPhone[phone] = { name: name, first: first, last: last, phone: phone, yes: yes, t: t, when: iWhen >= 0 ? String(r[iWhen] || '') : '' };
   });
-  summary.membersUpdatedAt = sheet.updated_at;
+  const members = [];
+  Object.keys(byPhone).forEach(function (p) { const m = byPhone[p]; if (m.yes) { summary.optedIn++; members.push(m); } else summary.declined++; });
+  summary.noPhone = Object.keys(noPhone);
 
   // 2. everything SimpleTexting has (paged)
   const contacts = {};
@@ -222,11 +238,12 @@ function syncTextList() {
   }
   const onList = function (c) { return (c.lists || []).some(function (l) { return l && (l.name === listName || l.listId === listName || l.id === listName); }); };
 
-  // 3. add what's missing — never anyone who opted out
+  // 3. add who's missing — never anyone who replied STOP
   const toCreate = [];
   members.forEach(function (m) {
     const c = contacts[m.phone];
-    if (!c) { toCreate.push({ contactPhone: m.phone, firstName: m.first, lastName: m.last, comment: 'LCR sync', listIds: [listName] }); return; }
+    const note = 'New member form opt-in' + (m.when ? ' ' + m.when : '');
+    if (!c) { toCreate.push({ contactPhone: m.phone, firstName: m.first, lastName: m.last, comment: note, listIds: [listName] }); return; }
     if (String(c.subscriptionStatus || '').toUpperCase().indexOf('OPT_OUT') === 0 || /UNSUB/i.test(c.subscriptionStatus || '')) { summary.optedOut++; return; }
     if (onList(c)) { summary.alreadyOnList++; return; }
     try { stFetch('/contact-lists/' + encodeURIComponent(listName) + '/contacts', 'post', { contactPhoneOrId: m.phone }); summary.addedToList++; }
@@ -238,17 +255,6 @@ function syncTextList() {
     catch (e) {  // fall back to one at a time so one bad number doesn't block the rest
       chunk.forEach(function (u) { try { stFetch('/contacts?upsert=true&listsReplacement=false', 'post', u); summary.added++; } catch (e2) { summary.errors.push(u.firstName + ' ' + u.lastName + ': ' + e2.message); } });
     }
-  }
-
-  // 4. optionally take people we added off the list once they leave the roster
-  if (removeMovedOut) {
-    const roster = {}; members.forEach(function (m) { roster[m.phone] = true; });
-    Object.keys(contacts).forEach(function (d) {
-      const c = contacts[d];
-      if (roster[d] || !onList(c) || String(c.comment || '').indexOf('LCR sync') < 0) return;
-      try { stFetch('/contact-lists/' + encodeURIComponent(listName) + '/contacts/' + d, 'delete'); summary.removed++; }
-      catch (e) { summary.errors.push((c.firstName || '') + ' ' + (c.lastName || '') + ': ' + e.message); }
-    });
   }
   summary.noPhoneCount = summary.noPhone.length; summary.noPhone = summary.noPhone.slice(0, 40);
   Logger.log('Text list: %s', JSON.stringify(summary));
@@ -357,7 +363,7 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   sheets → write every pending edit to the callings sheet, then re-copy all sheets  {"ok":true,"written":2,"callings":130,…}
 //   save   → one person's pending edits ("name") to the sheet, re-copy the callings sheet
 //   notify → send a Warning / Magnet text + email (sendFlagMessage_)
-//   textlist → add members to the SimpleTexting list now (syncTextList)
+//   textlist → add the form's text opt-ins to the SimpleTexting list now (syncTextList)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {

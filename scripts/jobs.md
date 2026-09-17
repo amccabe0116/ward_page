@@ -59,15 +59,9 @@ Leaders › Overview feeds — also every run (two quick copies, no clicking):
             and merge the two row lists before storing).
    site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } for each.
 
-Member list with phone numbers — also every run (feeds the SimpleTexting text-list sync):
-   LCR tab: navigate to https://lcr.churchofjesuschrist.org/records/member-list?lang=eng (or the
-            custom report "All members – contact info" under Create a Report if that page's table
-            doesn't scrape), wait for it to load, run scripts/lcr-report.js
-            (window.NP_REPORT = { key: 'lcr_members', title: 'LCR: Member list' });
-            keep Person UUID, Name (or Preferred Name), Phone, E-mail, Age, Gender — drop addresses.
-   site tab: db-sync { action: 'sheet', key: 'lcr_members', ... }.
-   The Apps Script (`syncTextList`, every 6 hours or Settings → Sync now) then adds anyone with a
-   mobile number to the SimpleTexting list.
+(The SimpleTexting text list is NOT fed from LCR: the Apps Script's `syncTextList` adds only the
+ people who ticked "agree" on the New Member Form's texting question, every 6 hours or from
+ Settings → Sync now. Nothing to do here for it.)
 
 Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
    LCR tab: window.NP_SYNC = { mode: 'roster', week: <week>, from: 0, to: 140 } then { from: 140, to: 400 }

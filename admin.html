@@ -211,8 +211,8 @@
             <p class="muted" id="t-msg" style="margin:6px 0 0"></p>
           </details>
           <details style="margin-top:10px">
-            <summary class="muted">Text list sync (members → SimpleTexting)</summary>
-            <p class="muted" style="margin:8px 0">Every member on the ward list with a mobile number is added to the SimpleTexting list. It runs after each sheet sync (every 6 hours) and never re-adds anyone who replied STOP. The member list itself comes from LCR with the Sunday sync.</p>
+            <summary class="muted">Text list sync (new member form → SimpleTexting)</summary>
+            <p class="muted" style="margin:8px 0">Whoever ticks <b>agree</b> on the new member form’s “Automated Messages” question (and gives a phone number) is added to the SimpleTexting list, with the form date kept on their contact as the consent record. It runs after each sheet sync (every 6 hours), never re-adds anyone who replied STOP, and never removes anyone.</p>
             <div class="inline"><button class="btn small secondary" id="tl-sync">Sync now</button><span class="muted" id="tl-msg"></span></div>
             <p class="muted small" id="tl-last" style="margin:8px 0 0"></p>
           </details>
@@ -523,7 +523,8 @@
         const box = $('tl-last'); if (!raw) { box.textContent = 'No sync yet.'; return; }
         let r; try { r = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { box.textContent = raw; return; }
         const when = r.at ? new Date(r.at).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
-        box.textContent = `Last sync ${when}: ${r.members} on the member list, ${r.withPhone} with a mobile number · ${r.added} added, ${r.addedToList} put on the list, ${r.alreadyOnList} already there, ${r.optedOut} opted out (left alone)` + (r.removed ? `, ${r.removed} removed` : '') + (r.noPhoneCount ? ` · ${r.noPhoneCount} without a number` : '') + (r.errors && r.errors.length ? ` · ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}: ${r.errors.slice(0, 3).join('; ')}` : '') + (r.membersUpdatedAt ? ` · member list from ${new Date(r.membersUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : '');
+        const n = k => r[k] == null ? 0 : r[k];
+        box.textContent = `Last sync ${when}: ${n('responses')} form responses, ${n('answered')} answered the texting question, ${n('optedIn')} agreed` + (n('declined') ? ` (${n('declined')} opted out)` : '') + ` · ${n('added')} added, ${n('addedToList')} put on the list, ${n('alreadyOnList')} already there, ${n('optedOut')} replied STOP (left alone)` + (n('noPhoneCount') ? ` · ${n('noPhoneCount')} agreed but gave no usable number${r.noPhone && r.noPhone.length ? ' (' + r.noPhone.slice(0, 5).join(', ') + (r.noPhone.length > 5 ? '…' : '') + ')' : ''}` : '') + (r.errors && r.errors.length ? ` · ${r.errors.length} error${r.errors.length === 1 ? '' : 's'}: ${r.errors.slice(0, 3).join('; ')}` : '');
       }
       $('tl-sync').addEventListener('click', async () => {
         const msg = $('tl-msg'); $('tl-sync').disabled = true; msg.textContent = 'Syncing… (30–60 s)';
