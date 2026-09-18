@@ -183,7 +183,7 @@ const TEXT_OPTIN_COLUMN = /automated messages|terms and conditions|text messag|\
 function syncTextList() {
   const props = PropertiesService.getScriptProperties();
   const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
-  const key = props.getProperty('SIMPLETEXTING_KEY');
+  const key = String(props.getProperty('SIMPLETEXTING_KEY') || '').trim();
   const listName = props.getProperty('SIMPLETEXTING_LIST') || 'North Point Ward - Notifications';
   if (!sbUrl || !sbKey || !adminPass) throw new Error('Set SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Script properties');
   if (!key) throw new Error('SIMPLETEXTING_KEY is not set in Script properties');
@@ -398,7 +398,7 @@ function sendFlagMessage_(b) {
   const res = { ok: true, sms: 'skipped', email: 'skipped' };
   const phone = String(b.phone || '').replace(/\D/g, '');
   if (phone && b.sms) {
-    const key = props.getProperty('SIMPLETEXTING_KEY');
+    const key = String(props.getProperty('SIMPLETEXTING_KEY') || '').trim();
     if (!key) { res.sms = 'skipped'; res.error = 'no SimpleTexting key yet (SIMPLETEXTING_KEY in Script properties)'; }
     else {
       // SimpleTexting wants a 10-digit US number ("3051234567"); drop a leading 1 if LCR gave 11 digits
