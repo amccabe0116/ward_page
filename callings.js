@@ -210,7 +210,8 @@ window.NPCallings = (function () {
     due: { label: 'Ready to move out', test: p => !p.sheetOnly && !p.deleted && p.due },
     other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && truthy(p.notes) },
     new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (!!p.section || !p.onSheet) },
-    sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly },
+    hasCalling: { label: 'Has a calling?', test: p => !!p.sheetOnly && !!(p.member && p.member.active) },
+    sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly && !(p.member && p.member.active) },
     removed: { label: 'Removed', test: p => !!p.deleted },
   };
   const FLAG_CLASS = { Warning: 'flag', Magnet: 'magnet' };
@@ -261,6 +262,12 @@ window.NPCallings = (function () {
     const nPending = people.filter(p => p.pending && !p.deleted).length, nDel = people.filter(p => p.deleted).length;
     $('cal-meta').textContent = (ls ? `${people.filter(p => !p.sheetOnly).length} without a calling · LCR report ${when(ls.updated_at)} · sheet ${cs ? when(cs.updated_at) : '—'}` : (cs ? `${people.length} people · sheet updated ${when(cs.updated_at)}` : '')) + (nPending ? ` · ${nPending} edit${nPending === 1 ? '' : 's'} waiting to go to the sheet` : '') + (nDel ? ` · ${nDel} row${nDel === 1 ? '' : 's'} to delete` : '');
     if (!view.length) { box.appendChild(el('p', { class: 'empty' }, people.length ? 'Nobody matches.' : 'No sheet data yet — run supabase/sheets.sql, then refresh the sheets.')); return; }
+    // on the "New / not on sheet" view: one button to give everyone missing from the sheet a row
+    const addable = filter === 'new' && C.sheetsRefreshUrl ? people.filter(p => !p.onSheet && p.lcr && !p.deleted && !p.pending).length : 0;
+    if (addable) box.appendChild(el('div', { class: 'inline cal-bulk' }, [
+      el('button', { class: 'chip add-sheet-btn', type: 'button', onclick: e => addAllToSheet(e.currentTarget) }, `Add all ${addable} not on the sheet`),
+      el('span', { class: 'muted small' }, 'Makes a row for each of them on the Google Sheet, pre-filled from LCR and their move-in form.'),
+    ]));
     // just the names and their tags — tap a row for the details (the slide)
     const list = el('div', { class: 'cal-list' });
     view.forEach((p, vi) => {
@@ -340,12 +347,13 @@ window.NPCallings = (function () {
         p.deleted
           ? el('button', { class: 'chip remove-btn', type: 'button', onclick: () => setDeleted(p, false) }, 'Undo remove')
           : el('button', { class: 'chip remove-btn danger', type: 'button', title: 'Take this person off the callings list and delete their row from the Google Sheet', onclick: async () => { if (await ask(`Remove ${p.name} from the callings list?\n\nTheir row comes off the Members without Callings sheet, and they stay hidden here until LCR no longer lists them (records moved, or a calling recorded). You can undo from the “Removed” filter.`)) setDeleted(p, true); } }, 'Remove'),
+        (!p.deleted && !p.onSheet && p.lcr && !p.pending && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName)) ? el('button', { class: 'chip add-sheet-btn', type: 'button', title: 'Add a row for this person to the Members without Callings sheet, pre-filled from LCR and their move-in form', onclick: e => addToSheet(p, e.currentTarget) }, 'Add to sheet') : null,
         p.deleted ? null : el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit'),
         p.pending && !p.deleted && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName) ? el('button', { class: 'chip save-sheet-btn', type: 'button', title: 'Write this person\u2019s edits into the Google Sheet now', onclick: e => saveToSheet(p, e.currentTarget) }, 'Save to sheet') : null,
       ])]),
       truthy(p.notes) ? el('p', { class: 'note-line' }, [el('span', { class: 'muted' }, 'Notes · '), p.notes]) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', /^\s*y(es)?\s*$/i.test(p.texted) ? '✓ Yes' : p.texted], ['Answer', p.answer], ['Sustained', /^\s*y(es)?\s*$/i.test(p.sustained) ? '✓ Yes' : p.sustained]]),
-      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : 'Not on the callings sheet yet — saving an edit here adds their row.') : null,
+      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : p.pending ? 'Not on the callings sheet yet — their row goes in with Save to sheet or the next sync.' : 'Not on the callings sheet yet — Add to sheet makes their row (location, age and move-in form answers filled in), or saving an edit adds it.') : null,
       p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
         el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag]]),
         el('div', { class: 'flag-actions' }, (() => {
@@ -610,6 +618,58 @@ window.NPCallings = (function () {
       if (btn) { btn.disabled = false; btn.textContent = 'Save to sheet'; }
       else if (!$('deck').hidden && !$('deck').querySelector('.edit-form')) renderDeck();
     }
+  }
+  // The sheet's intake columns, pre-filled from LCR and the newest move-in form for someone who
+  // isn't on the sheet yet. Only filled-in values are returned (blank cells stay blank).
+  const INTAKE_FROM_FORM = [['CAR', /have a car/i], ['LENGTH OF STAY', /how long do you plan/i], ['MISSION', /serve a mission/i], ['PURPOSE IN ATL', /why you.re here/i], ['HOBBIES', /hobbies/i], ['MUSIC', /sing or play/i]];
+  function intakeValues(p) {
+    const L = p.lcr || {}, f = p.forms[0], v = {};
+    if (truthy(L['Address - City'])) v.LOCATION = L['Address - City'].trim();
+    if (truthy(L.Age)) v.AGE = String(L.Age).trim();
+    if (f) for (const [key, re] of INTAKE_FROM_FORM) { const x = col(f.o, re); if (truthy(x)) v[key] = String(x).trim().slice(0, 500); }
+    return v;
+  }
+  // "Add to sheet": record the pre-filled row as a site edit, then write it into the Google Sheet
+  // right away (the sheet copy comes back with them on it). Needs supabase/addrow.sql.
+  async function addToSheet(p, btn) {
+    const v = intakeValues(p);
+    const lines = Object.entries(v).map(([k, x]) => `${k.replace(/ \(under yr\)$/, '')}: ${x.length > 70 ? x.slice(0, 70) + '…' : x}`);
+    if (!(await ask(`Add ${p.name} to the Members without Callings sheet?\n\n${lines.length ? 'Their row starts with:\n' + lines.join('\n') : 'Just their name for now — nothing in LCR or the move-in form to fill in.'}`))) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+    try {
+      await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || (p.member && p.member.lcr_uuid) || null, p_values: v, p_by: null });
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Add to sheet'; }
+      toast(/not editable/.test(e.message) ? 'Run supabase/addrow.sql in Supabase first (' + e.message + ')' : 'Not added: ' + e.message, 6000); return;
+    }
+    edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
+    build(); applyFilter();
+    const at = view.findIndex(x => x.sheetName === p.sheetName); if (at >= 0) deckAt = at;
+    renderList();
+    const q = people.find(x => x.sheetName === p.sheetName) || p;
+    await saveToSheet(q, btn);
+  }
+  // Everyone on LCR's report who has no row yet, in one go (the chip on the "New / not on sheet" filter).
+  async function addAllToSheet(btn) {
+    const missing = people.filter(p => !p.onSheet && p.lcr && !p.deleted && !p.pending);
+    if (!missing.length) { toast('Everyone on the LCR report already has a row.'); return; }
+    if (!(await ask(`Add ${missing.length} ${missing.length === 1 ? 'person' : 'people'} to the Members without Callings sheet?\n\n${missing.map(p => p.name).join(', ')}\n\nEach row starts with their location, age and move-in form answers where we have them.`))) return;
+    btn.disabled = true; btn.textContent = 'Adding…';
+    let n = 0;
+    try {
+      for (const p of missing) { await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: intakeValues(p), p_by: null }); n++; }
+    } catch (e) { toast(/not editable/.test(e.message) ? 'Run supabase/addrow.sql in Supabase first (' + e.message + ')' : `Stopped after ${n}: ${e.message}`, 6000); }
+    if (n) {
+      // one trip to the Google script writes every pending row and re-copies the sheet
+      btn.textContent = 'Writing to the sheet…';
+      try {
+        const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'sheets', pass: ctx.getPass() }) });
+        const j = await r.json(); if (!j.ok) throw new Error(j.error || 'write failed');
+        toast(`${n} added to the Google Sheet`);
+      } catch (e) { toast(`${n} queued, but the sheet write failed (${e.message}) — they go in with the next sync`, 6000); }
+    }
+    try { await reloadEdits(); } catch (e) { /* the list redraws on the next load */ }
+    btn.disabled = false;
   }
   async function refreshFromGoogle() {
     const url = C.sheetsRefreshUrl;

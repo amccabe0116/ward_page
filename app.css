@@ -364,6 +364,9 @@ body.deck-open { overflow: hidden; }
 .slide-card h3 .remove-btn.danger { color: var(--danger); border-color: #efc7c7; }
 .slide-card h3 .save-sheet-btn { background: var(--navy); color: #fff; border-color: var(--navy); }
 .slide-card h3 .save-sheet-btn:disabled { opacity: .6; }
+.add-sheet-btn { background: var(--gold, #e2c377); color: var(--navy); border-color: var(--gold, #e2c377); font-weight: 600; }
+.add-sheet-btn:disabled { opacity: .6; }
+.cal-bulk { margin: 0 0 10px; align-items: center; flex-wrap: wrap; }
 .edit-form { display: grid; gap: 8px; }
 .edit-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
 .edit-field { font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; width: 100%; background: var(--card); color: var(--ink); }

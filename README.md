@@ -83,7 +83,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    callings sheet who accepted but hasn't been sustained. The two LCR copies are part of the
    Sunday sync (`scripts/jobs.md`).
 
-6. **Text list.** `syncTextList` in `scripts/announcements.gs` reads the New Member Form
+6. **Add to sheet.** People on LCR's report with no row on the sheet get an *Add to sheet*
+   button on their slide (and an *Add all* chip on the New / not on sheet filter). The row is
+   pre-filled from LCR (location, age) and their newest move-in form (car, length of stay,
+   mission, purpose, hobbies, music), stored as a site edit, and written to the Google Sheet right
+   away. Needs `supabase/addrow.sql` (it widens the columns `admin_callings_edit` accepts).
+
+7. **Text list.** `syncTextList` in `scripts/announcements.gs` reads the New Member Form
    responses and adds only the people who ticked *agree* on the form's "Automated Messages –
    Terms and conditions" question (and gave a phone number) to the SimpleTexting list
    (`SIMPLETEXTING_LIST`, default "North Point Ward - Notifications"); the form timestamp is kept

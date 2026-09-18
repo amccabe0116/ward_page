@@ -315,11 +315,12 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
   const sheet = cfg.tab ? ss.getSheetByName(cfg.tab) : ss.getSheets()[0];
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(function (h) { return String(h || '').trim(); });
-  // columns the site can write; "Flag" and "Flag sent" are added to the sheet the first time they are needed
+  // columns the site can write; "Flag" and "Flag sent" are added to the sheet the first time they are
+  // needed, any other column that has been renamed on the sheet is skipped (logged) rather than failing the run
   const col = function (name) {
     let i = headers.indexOf(name);
     if (i < 0) {
-      if (name !== 'Flag' && name !== 'Flag sent') throw new Error('column "' + name + '" not found on the sheet');
+      if (name !== 'Flag' && name !== 'Flag sent') { Logger.log('column "%s" not on the sheet — skipped', name); return 0; }
       i = headers.length; headers.push(name); sheet.getRange(1, i + 1).setValue(name).setFontWeight('bold');
     }
     return i + 1;
@@ -340,7 +341,8 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
     let row = rowOf(e.name);
     if (!row) { row = sheet.getLastRow() + 1; sheet.getRange(row, nameCol).setValue(e.name); data.push([]); }
     Object.keys(e.edits || {}).forEach(function (k) {
-      const v = e.edits[k], c = col(k), current = String((data[row - 1] || [])[c - 1] == null ? '' : (data[row - 1] || [])[c - 1]).trim();
+      const v = e.edits[k], c = col(k); if (!c) return;
+      const current = String((data[row - 1] || [])[c - 1] == null ? '' : (data[row - 1] || [])[c - 1]).trim();
       if (v === null) { sheet.getRange(row, c).clearContent(); return; }          // cleared on purpose on the site
       if (String(v).trim() === '' && current) { Logger.log('%s / %s: blank edit kept "%s"', e.name, k, current); return; }
       sheet.getRange(row, c).setValue(v);

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=3">
+  <link rel="stylesheet" href="app.css?v=4">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -113,8 +113,9 @@
             <div><dt><span class="pill magnet">Magnet</span></dt><dd>Their records came in without a new-member meeting, so they're being sent back to their previous ward. <em>Send the magnet message</em> does the same for this case.</dd></div>
             <div><dt><span class="pill off">Move</span> <span class="pill off">Aged out</span></dt><dd>From a note in parentheses after the name on the sheet, e.g. "Shane Woods (aged out)". Other Notes itself is just text — nothing is read out of it.</dd></div>
             <div><dt><span class="pill off">Nothing yet</span> <span class="pill wait">Proposed</span> <span class="pill wait">Texted</span> <span class="pill need">Answered / Declined</span> <span class="pill ok">Accepted / Sustained</span></dt><dd>Where the calling stands, from the Proposed / Who texts / Texted / Answer / Sustained columns.</dd></div>
-            <div><dt><span class="pill new">new</span> <span class="pill new">not on sheet</span></dt><dd>In the sheet's NEW ADDITIONS section, or on LCR's report but with no row on the sheet yet (saving an edit adds the row).</dd></div>
-            <div><dt><span class="pill warn">Not in LCR</span> <span class="pill ok">Has a calling?</span></dt><dd>On the sheet but not on LCR's no-calling report: either their records are gone (Not in LCR — delete the row) or they're still on the roll, so they probably received a calling. Both are in the <em>Not in LCR</em> filter.</dd></div>
+            <div><dt><span class="pill new">new</span> <span class="pill new">not on sheet</span></dt><dd>In the sheet's NEW ADDITIONS section, or on LCR's report but with no row on the sheet yet — <em>Add to sheet</em> on their slide (or <em>Add all</em> on this filter) makes the row, pre-filled from LCR and their move-in form.</dd></div>
+            <div><dt><span class="pill ok">Has a calling?</span></dt><dd>On the sheet and still on the ward roll, but no longer on LCR's Members without Callings report — so a calling was most likely recorded in LCR. Check their Callings/Classes tab in LCR; once it's done, <em>Remove</em> on their slide takes them off the sheet.</dd></div>
+            <div><dt><span class="pill warn">Not in LCR</span></dt><dd>On the sheet but not on the ward roll at all — their records moved out (or were never here). <em>Remove</em> deletes the row.</dd></div>
             <div><dt><span class="pill due">Ready to move out</span></dt><dd>The warning / magnet message went out long enough ago (21 days for Warning, 7 for Magnet — change it under Settings) that it's time to move their records. The date comes from the "Flag sent" column, which is filled in automatically when you send from here or can be typed in.</dd></div>
             <div><dt><span class="pill wait">✎ pending</span></dt><dd>Edited here on the site; it goes into the Google Sheet the next time the sync runs.</dd></div>
             <div><dt><span class="pill warn">Removed</span></dt><dd><em>Remove</em> on a slide takes someone off this list: their row is deleted from the Google Sheet and they stay hidden until LCR stops listing them (records moved, or a calling recorded). Find them under the <em>Removed</em> filter to undo.</dd></div>
@@ -240,7 +241,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=18"></script>
+  <script src="callings.js?v=19"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
