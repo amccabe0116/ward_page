@@ -147,7 +147,7 @@ window.NPCallings = (function () {
       // site-side edits win over the sheet copy until the Apps Script has written them into the sheet
       const ed = (lcr && editByUuid.get(lcr['Person UUID'])) || (member && editByUuid.get(member.lcr_uuid)) || editByName.get(norm(sheetName)) || editByName.get(norm(name));
       const pending = !!(ed && (!ed.synced_at || new Date(ed.updated_at) > sheetAt));
-      if (pending) for (const [k, v] of Object.entries(ed.edits || {})) o[k] = v == null ? '' : v;  // null = cleared on purpose
+      if (pending || !sr) for (const [k, v] of Object.entries((ed && ed.edits) || {})) o[k] = v == null ? '' : v;  // null = cleared on purpose; no sheet row = the site copy is all there is
       const notes = o['Other Notes'] || '';
       // Flag is its own column (Warning / Magnet) — the only place it comes from. Other Notes is free text
       // and is never read for meaning (a note like "removed from warning list" must not flag anyone).
@@ -212,7 +212,7 @@ window.NPCallings = (function () {
     new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (!!p.section || !p.onSheet) },
     hasCalling: { label: 'Has a calling?', test: p => !!p.sheetOnly && !!(p.member && p.member.active) },
     sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly && !(p.member && p.member.active) },
-    removed: { label: 'Removed', test: p => !!p.deleted },
+    removed: { label: 'Removed / left off', test: p => !!p.deleted },
   };
   const FLAG_CLASS = { Warning: 'flag', Magnet: 'magnet' };
   const DUE_DEFAULT = { Warning: 21, Magnet: 7 };
@@ -278,9 +278,9 @@ window.NPCallings = (function () {
         p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null,
         ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
         p.section ? el('span', { class: 'pill new' }, 'new') : null,
-        (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'not on sheet') : null,
+        (!p.onSheet && p.lcr && !p.deleted) ? el('span', { class: 'pill new' }, 'not on sheet') : null,
         sheetOnlyPill(p),
-        p.deleted ? el('span', { class: 'pill warn' }, 'Removed') : null,
+        p.deleted ? el('span', { class: 'pill warn' }, p.onSheet ? 'Removed' : 'Left off the sheet') : null,
         p.pending && !p.deleted ? el('span', { class: 'pill wait' }, '✎ pending') : null,
         (!p.sheetOnly && p.member && !p.member.active) ? el('span', { class: 'pill warn' }, 'Records moved out') : null,
       ];
@@ -334,9 +334,9 @@ window.NPCallings = (function () {
         p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null,
         ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
         p.section ? el('span', { class: 'pill new' }, p.section) : null,
-        (!p.onSheet && p.lcr) ? el('span', { class: 'pill new' }, 'Not on the sheet yet') : null,
+        (!p.onSheet && p.lcr && !p.deleted) ? el('span', { class: 'pill new' }, 'Not on the sheet yet') : null,
         sheetOnlyPill(p),
-        p.deleted ? el('span', { class: 'pill warn' }, 'Removed' + (p.pending ? ' · coming off the sheet' : '')) : null,
+        p.deleted ? el('span', { class: 'pill warn' }, p.onSheet ? 'Removed' + (p.pending ? ' · coming off the sheet' : '') : 'Left off the sheet on purpose') : null,
         truthy(o['RECENT CONVERT (under yr)']) ? el('span', { class: 'pill recommend' }, 'Recent convert ' + (o['RECENT CONVERT (under yr)'].replace(/^yes\s*-?\s*/i, '').trim())) : null,
         p.tag ? el('span', { class: 'pill off' }, p.tag) : null,
         (!p.sheetOnly && p.member && !p.member.active) ? el('span', { class: 'pill warn' }, 'Records have moved out') : null,
@@ -345,15 +345,18 @@ window.NPCallings = (function () {
     const calling = el('section', { class: 'slide-card calling' }, [
       el('h3', {}, ['Calling', el('span', { class: 'slide-actions' }, [
         p.deleted
-          ? el('button', { class: 'chip remove-btn', type: 'button', onclick: () => setDeleted(p, false) }, 'Undo remove')
-          : el('button', { class: 'chip remove-btn danger', type: 'button', title: 'Take this person off the callings list and delete their row from the Google Sheet', onclick: async () => { if (await ask(`Remove ${p.name} from the callings list?\n\nTheir row comes off the Members without Callings sheet, and they stay hidden here until LCR no longer lists them (records moved, or a calling recorded). You can undo from the “Removed” filter.`)) setDeleted(p, true); } }, 'Remove'),
+          ? el('button', { class: 'chip remove-btn', type: 'button', onclick: () => setDeleted(p, false) }, p.onSheet ? 'Undo remove' : 'Back on the list')
+          : (!p.onSheet && p.lcr)
+            ? el('button', { class: 'chip remove-btn', type: 'button', title: 'They are on LCR\u2019s report on purpose without a sheet row: hide them from New / not on sheet and skip them in Add all', onclick: () => leaveOff(p) }, 'Leave off the sheet')
+            : el('button', { class: 'chip remove-btn danger', type: 'button', title: 'Take this person off the callings list and delete their row from the Google Sheet', onclick: async () => { if (await ask(`Remove ${p.name} from the callings list?\n\nTheir row comes off the Members without Callings sheet, and they stay hidden here until LCR no longer lists them (records moved, or a calling recorded). You can undo from the “Removed / left off” filter.`)) setDeleted(p, true); } }, 'Remove'),
         (!p.deleted && !p.onSheet && p.lcr && !p.pending && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName)) ? el('button', { class: 'chip add-sheet-btn', type: 'button', title: 'Add a row for this person to the Members without Callings sheet, pre-filled from LCR and their move-in form', onclick: e => addToSheet(p, e.currentTarget) }, 'Add to sheet') : null,
         p.deleted ? null : el('button', { class: 'chip edit-btn', type: 'button', onclick: () => editCalling(p, calling) }, 'Edit'),
         p.pending && !p.deleted && C.sheetsRefreshUrl && !savingToSheet.has(p.sheetName) ? el('button', { class: 'chip save-sheet-btn', type: 'button', title: 'Write this person\u2019s edits into the Google Sheet now', onclick: e => saveToSheet(p, e.currentTarget) }, 'Save to sheet') : null,
       ])]),
       truthy(p.notes) ? el('p', { class: 'note-line' }, [el('span', { class: 'muted' }, 'Notes · '), p.notes]) : null,
       dl([['Proposed', p.proposed, { big: true }], ['Who texts', p.assignment], ['Texted', /^\s*y(es)?\s*$/i.test(p.texted) ? '✓ Yes' : p.texted], ['Answer', p.answer], ['Sustained', /^\s*y(es)?\s*$/i.test(p.sustained) ? '✓ Yes' : p.sustained]]),
-      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes)) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : p.pending ? 'Not on the callings sheet yet — their row goes in with Save to sheet or the next sync.' : 'Not on the callings sheet yet — Add to sheet makes their row (location, age and move-in form answers filled in), or saving an edit adds it.') : null,
+      (p.deleted && !p.onSheet) ? el('p', { class: 'muted' }, 'Kept off the callings sheet on purpose — they don\u2019t count as “not on sheet” and Add all skips them. Back on the list undoes it.') : null,
+      (!truthy(p.proposed) && !truthy(p.assignment) && !truthy(p.notes) && !p.deleted) ? el('p', { class: 'muted' }, p.onSheet ? 'Nothing proposed yet.' : p.pending ? 'Not on the callings sheet yet — their row goes in with Save to sheet or the next sync.' : 'Not on the callings sheet yet — Add to sheet makes their row (location, age and move-in form answers filled in), or saving an edit adds it.') : null,
       p.flag ? el('div', { class: 'flag-box ' + FLAG_CLASS[p.flag] }, [
         el('div', {}, [el('b', {}, p.flag + ': '), FLAG_MEANING[p.flag]]),
         el('div', { class: 'flag-actions' }, (() => {
@@ -482,12 +485,24 @@ window.NPCallings = (function () {
     form.querySelector('.edit-field').focus();
   }
 
+  // Someone on LCR's report who is deliberately not on the sheet: note why (optional), then mark
+  // them the same way Remove does — hidden from the working views, skipped by Add all, undo from
+  // the Removed / left off filter. No sheet row is touched because there isn't one.
+  async function leaveOff(p) {
+    const reason = prompt(`Keep ${p.name} off the callings sheet?\n\nWhy, in a few words (optional — it shows on their card):`, p.notes || '');
+    if (reason === null) return;
+    await new Promise(r => setTimeout(r, 150));
+    try {
+      if (reason.trim() && reason.trim() !== (p.notes || '').trim()) await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: p.sheetName, p_lcr_uuid: (p.lcr && p.lcr['Person UUID']) || null, p_values: { 'Other Notes': reason.trim().slice(0, 500) }, p_by: null });
+    } catch (e) { toast('Could not save the note: ' + e.message, 4000); return; }
+    await setDeleted(p, true);
+  }
   async function setDeleted(p, del) {
     try {
       await rpc('admin_callings_delete', { p_pass: ctx.getPass(), p_name: p.sheetName, p_delete: del, p_by: null });
       edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
       build(); renderList(); if (!$('deck').hidden) { applyFilter(); deckAt = Math.min(deckAt, Math.max(0, view.length - 1)); if (view.length) renderDeck(); else closeDeck(); }
-      toast(del ? `${p.name} removed — coming off the sheet` : `${p.name} is back on the list`);
+      toast(del ? (p.onSheet ? `${p.name} removed — coming off the sheet` : `${p.name} left off the sheet`) : `${p.name} is back on the list`);
       if (C.sheetsRefreshUrl) saveToSheet(p, null, true);
     } catch (e) { toast(/admin_callings_delete/.test(e.message) ? 'Run supabase/flags.sql in Supabase first' : 'Failed: ' + e.message, 4000); }
   }

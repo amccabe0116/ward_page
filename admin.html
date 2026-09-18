@@ -118,7 +118,7 @@
             <div><dt><span class="pill warn">Not in LCR</span></dt><dd>On the sheet but not on the ward roll at all — their records moved out (or were never here). <em>Remove</em> deletes the row.</dd></div>
             <div><dt><span class="pill due">Ready to move out</span></dt><dd>The warning / magnet message went out long enough ago (21 days for Warning, 7 for Magnet — change it under Settings) that it's time to move their records. The date comes from the "Flag sent" column, which is filled in automatically when you send from here or can be typed in.</dd></div>
             <div><dt><span class="pill wait">✎ pending</span></dt><dd>Edited here on the site; it goes into the Google Sheet the next time the sync runs.</dd></div>
-            <div><dt><span class="pill warn">Removed</span></dt><dd><em>Remove</em> on a slide takes someone off this list: their row is deleted from the Google Sheet and they stay hidden until LCR stops listing them (records moved, or a calling recorded). Find them under the <em>Removed</em> filter to undo.</dd></div>
+            <div><dt><span class="pill warn">Removed</span> <span class="pill warn">Left off the sheet</span></dt><dd><em>Remove</em> on a slide takes someone off this list: their row is deleted from the Google Sheet and they stay hidden until LCR stops listing them (records moved, or a calling recorded). <em>Leave off the sheet</em> does the same for someone who has no row on purpose (with a note saying why) — they stop counting as “not on sheet” and <em>Add all</em> skips them. Both are under the <em>Removed / left off</em> filter, where <em>Back on the list</em> undoes it.</dd></div>
           </dl>
         </details>
         <div id="cal-list" style="margin-top:12px"><p class="empty">Loading…</p></div>
@@ -241,7 +241,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=19"></script>
+  <script src="callings.js?v=20"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
