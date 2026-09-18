@@ -95,6 +95,13 @@ window.NPCallings = (function () {
     }
     return { findMember };
   }
+  // a last name as written, plus each part of a hyphenated / two-word one ("esparza-pulido" → also "esparza", "pulido")
+  function lastParts(last) {
+    const whole = norm(last); if (!whole) return [];
+    const out = [whole]; const parts = whole.split(/[\s-]+/).filter(w => w.length > 2);
+    if (parts.length > 1) parts.forEach(w => { if (!out.includes(w)) out.push(w); });
+    return out;
+  }
   // "First [Middle] Last Last" -> every [first, last] split worth trying
   function splits(fullName) {
     const t = norm(fullName).split(' ').filter(Boolean);
@@ -119,8 +126,11 @@ window.NPCallings = (function () {
         const o = rowObj(ns, row);
         const first = col(o, /^first name/i), last = col(o, /^last name/i), pref = col(o, /^preferred name/i);
         if (!truthy(first) && !truthy(last)) continue;
-        const keys = new Set([norm(first).split(' ')[0] + '|' + norm(last)]);
-        if (truthy(pref) && !/^(no|n\/a|none)\b/i.test(pref)) keys.add(norm(pref).split(' ')[0] + '|' + norm(last));
+        // "Esparza-Pulido" on the form should still find "Michelle Esparza" on the sheet / in LCR, so a
+        // hyphenated or two-word last name is keyed by the whole and by each part
+        const lasts = lastParts(last);
+        const keys = new Set(lasts.map(l => norm(first).split(' ')[0] + '|' + l));
+        if (truthy(pref) && !/^(no|n\/a|none)\b/i.test(pref)) lasts.forEach(l => keys.add(norm(pref).split(' ')[0] + '|' + l));
         const rec = { o, when: parseDate(col(o, /^timestamp/i)), member: idx.findMember([...keys].map(k => k.split('|'))) };
         for (const k of keys) { if (!forms.has(k)) forms.set(k, []); forms.get(k).push(rec); }
       }
@@ -145,8 +155,8 @@ window.NPCallings = (function () {
       return null;
     };
     const findForm = (variants, member) => {
-      for (const [f, l] of variants) { if (forms.has(f + '|' + l)) return forms.get(f + '|' + l); }
-      if (member) { const [last, restName] = String(member.name).split(/,\s*/); return forms.get(norm(restName).split(' ')[0] + '|' + norm(last)) || null; }
+      for (const [f, l] of variants) for (const lp of lastParts(l)) { if (forms.has(f + '|' + lp)) return forms.get(f + '|' + lp); }
+      if (member) { const [last, restName] = String(member.name).split(/,\s*/); const f = norm(restName).split(' ')[0]; for (const lp of lastParts(last)) { if (forms.has(f + '|' + lp)) return forms.get(f + '|' + lp); } }
       return null;
     };
     const sheetAt = cs.updated_at ? new Date(cs.updated_at) : new Date(0);
@@ -396,7 +406,7 @@ window.NPCallings = (function () {
     const aboutPairs = [['Temple recommend', tr], ['Ministering brothers', L['Ministering Brothers']], ['Ministering sisters', L['Ministering Sisters']], ['Has children', yes(L['Has Children']) ? 'Yes' : ''],
       ['Length of stay', o['LENGTH OF STAY']], ['Why in Atlanta', o['PURPOSE IN ATL']], ['Mission', o.MISSION], ['Hobbies', o.HOBBIES], ['Music', o.MUSIC]];
     const about = el('section', { class: 'slide-card' }, [
-      el('h3', {}, 'About'),
+      el('h3', {}, ['About', el('span', { class: 'muted', style: 'font-weight:400;font-size:13px' }, ' · from LCR and the sheet')]),
       dl(aboutPairs),
       aboutPairs.every(([, v]) => !truthy(v)) ? el('p', { class: 'muted' }, 'Nothing on the sheet yet.') : null,
     ]);
