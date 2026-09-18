@@ -266,7 +266,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=5"></script>
+  <script src="posts.js?v=6"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -643,12 +643,14 @@
       $('pe-copy-html').addEventListener('click', () => copyEmail(true));
       function paintFlyerPicker() {
         const box = $('pe-flyer-list'); box.innerHTML = '';
-        const withFlyer = livePosts.filter(p => p.flyer_url);
-        if (!withFlyer.length) { box.appendChild(el('p', { class: 'muted' }, 'No flyers on the live posts.')); return; }
-        withFlyer.forEach(p => box.appendChild(el('label', { class: 'flyer-opt' }, [
+        // one entry per flyer: two posts can share an image (the FHE calendar), and it only needs attaching once
+        const byUrl = new Map();
+        livePosts.filter(p => p.flyer_url).forEach(p => { const g = byUrl.get(p.flyer_url); if (g) g.also.push(p.title); else byUrl.set(p.flyer_url, { post: p, also: [] }); });
+        if (!byUrl.size) { box.appendChild(el('p', { class: 'muted' }, 'No flyers on the live posts.')); return; }
+        [...byUrl.values()].forEach(({ post: p, also }) => box.appendChild(el('label', { class: 'flyer-opt' }, [
           el('input', { type: 'checkbox', checked: '', 'data-id': p.id }),
           el('img', { src: p.flyer_url, alt: '' }),
-          el('span', {}, [el('b', {}, p.title), el('span', { class: 'muted small' }, p.event_date ? ' · ' + NPPosts.dateParts(p.event_date).long : '')]),
+          el('span', {}, [el('b', {}, p.title), el('span', { class: 'muted small' }, (p.event_date ? ' · ' + NPPosts.dateParts(p.event_date).long : '') + (also.length ? ' · also used by ' + also.join(', ') : ''))]),
         ])));
       }
       const pickedFlyers = () => { const ids = new Set([...document.querySelectorAll('#pe-flyer-list input:checked')].map(i => +i.dataset.id)); return livePosts.filter(p => ids.has(p.id)); };

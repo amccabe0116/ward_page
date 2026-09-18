@@ -300,7 +300,7 @@ window.NPPosts = (function () {
   }
   // Download the given posts' flyers as one .zip (or one file at a time when zip is false).
   async function downloadFlyers(posts, opts) {
-    opts = opts || {}; const withFlyer = posts.filter(p => p.flyer_url); const files = []; const failed = [];
+    opts = opts || {}; const seen = new Set(); const withFlyer = posts.filter(p => p.flyer_url && !seen.has(p.flyer_url) && seen.add(p.flyer_url)); const files = []; const failed = [];
     for (let i = 0; i < withFlyer.length; i++) { try { files.push(await fetchFlyer(withFlyer[i], i + 1)); } catch (e) { failed.push(withFlyer[i].title); } }
     if (opts.zip === false) { for (const f of files) { saveBlob(f.blob, f.name); await new Promise(r => setTimeout(r, 400)); } }
     else if (files.length) saveBlob(await zipFiles(files), (opts.name || 'flyers') + '.zip');
