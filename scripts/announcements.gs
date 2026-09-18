@@ -43,6 +43,13 @@
  *      It runs at the end of every syncMemberSheets run and from Leaders › Settings → "Sync now".
  *      It never re-adds anyone who replied STOP and never removes anyone; a later form response
  *      that says "Opt out" cancels an earlier "agree" from the same number.
+ *  10. Calendar files: `syncCalendar` turns the approved posts into calendar.ics (the ward
+ *      calendar people subscribe to from calendar.html) and cal/<id>.ics (the "Add to calendar"
+ *      links on each post and in the weekly email), committed to the repo like the flyers. It runs
+ *      at the end of every syncMemberSheets and the Leaders page calls it (web app action
+ *      "calendar") the moment a post is approved, edited, taken down or deleted. After pasting this
+ *      version: function dropdown → syncCalendar → Run once, then Deploy → Manage deployments →
+ *      edit → Version: New version → Deploy, so the web app picks it up.
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -169,6 +176,8 @@ function syncMemberSheets() {
   if (props.getProperty('SIMPLETEXTING_KEY')) {
     try { result.textList = syncTextList(); } catch (e) { Logger.log('Text list sync failed: %s', e && e.message); result.textListError = String(e && e.message); }
   }
+  // 3. approved posts → calendar.ics + cal/<id>.ics on the site (drops events that have passed)
+  try { result.calendar = syncCalendar(); } catch (e) { Logger.log('Calendar sync failed: %s', e && e.message); result.calendarError = String(e && e.message); }
   return result;
 }
 
@@ -366,6 +375,7 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   save   → one person's pending edits ("name") to the sheet, re-copy the callings sheet
 //   notify → send a Warning / Magnet text + email (sendFlagMessage_)
 //   textlist → add the form's text opt-ins to the SimpleTexting list now (syncTextList)
+//   calendar → rebuild calendar.ics + cal/<id>.ics from the approved posts now (syncCalendar)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
@@ -373,6 +383,7 @@ function doPost(e) {
     if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
     if (body.action === 'notify') return out(sendFlagMessage_(body));
     if (body.action === 'textlist') { const r = syncTextList(); r.ok = true; return out(r); }
+    if (body.action === 'calendar') { const r = syncCalendar(); r.ok = true; return out(r); }
     if (body.action === 'save') {  // one person's edits → the sheet now (the "Save to sheet" button on a slide)
       const props = PropertiesService.getScriptProperties();
       const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
@@ -469,6 +480,125 @@ function isLeader_(pass) {
     headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: pass }),
   });
   return res.getResponseCode() < 300;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Posts → calendar files on the site.
+//   calendar.ics   the whole ward calendar: subscribe once (calendar.html) and Apple / Google /
+//                  Outlook keep it fresh on their own — every approved event, and the last few
+//                  weeks of past ones.
+//   cal/<id>.ics   one event each, for the "Add to calendar" links on the home page and in the
+//                  weekly email (Apple / Outlook; Google users get a calendar.google.com link).
+// Runs at the end of every syncMemberSheets and right away from the Leaders page (web app action
+// "calendar") after a post is approved, edited, taken down or deleted. Only files whose content
+// actually changed are committed, so a run with nothing new makes no commits at all.
+// Times: posts hold Eastern wall-clock times; the files carry UTC instants, which every calendar
+// understands without a VTIMEZONE block.
+const SITE = 'https://northpointysa.com';
+const CAL_TZ = 'America/New_York';
+const CAL_NAME = 'North Point YSA';
+const CAL_PAST_DAYS = 60;        // past events stay in the subscribed calendar this long (admin_posts keeps ~60 days)
+const CAL_LINK_PAST_DAYS = 7;    // cal/<id>.ics stays this long after the event, then the file goes
+const CAL_DEFAULT_HOURS = 2;     // an event with a start time and no end time
+
+function syncCalendar() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('GITHUB_TOKEN'), sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  if (!token || !sbUrl || !sbKey || !adminPass) throw new Error('Set GITHUB_TOKEN, SUPABASE_URL, SUPABASE_KEY and ADMIN_PASS under Project Settings → Script properties');
+  const res = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_posts', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass }),
+  });
+  if (res.getResponseCode() >= 300) throw new Error('admin_posts → ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 200));
+  const all = JSON.parse(res.getContentText() || '[]');
+  const today = Utilities.formatDate(new Date(), CAL_TZ, 'yyyy-MM-dd');
+  const dayIso = function (daysAgo) { return Utilities.formatDate(new Date(Date.now() - daysAgo * 864e5), CAL_TZ, 'yyyy-MM-dd'); };
+  const events = all.filter(function (p) { return p.status === 'approved' && p.event_date && String(p.event_date).slice(0, 10) >= dayIso(CAL_PAST_DAYS); })
+    .sort(function (a, b) { return (a.event_date + (a.start_time || '')) < (b.event_date + (b.start_time || '')) ? -1 : 1; });
+  const linked = events.filter(function (p) { return String(p.event_date).slice(0, 10) >= dayIso(CAL_LINK_PAST_DAYS); });
+  const stamp = icsStamp_(new Date());
+  const summary = { events: events.length, links: linked.length, written: [], deleted: [], unchanged: 0 };
+
+  // what is on the site now (one listing call each; a missing folder is fine on the first run)
+  const dir = ghGet_(token, 'cal'); const have = {};
+  (Array.isArray(dir) ? dir : []).forEach(function (f) { if (f.type === 'file') have[f.name] = f.sha; });
+  const cur = ghGet_(token, 'calendar.ics');
+  if (cur && cur.content && gitBlobSha_(Utilities.newBlob(Utilities.base64Decode(cur.content.replace(/\n/g, ''))).getDataAsString()) !== cur.sha) Logger.log('Warning: the blob-sha check disagrees with GitHub, so unchanged files will be re-committed each run');
+
+  const put = function (path, text, sha, message) {
+    if (sha && sha === gitBlobSha_(text)) { summary.unchanged++; return; }
+    ghPut_(token, path, Utilities.base64Encode(text, Utilities.Charset.UTF_8), message, sha || undefined);
+    summary.written.push(path);
+  };
+  // 1. one file per upcoming event
+  const keep = {};
+  linked.forEach(function (p) {
+    const name = p.id + '.ics'; keep[name] = true;
+    put('cal/' + name, icsCalendar_([p], stamp, p.title), have[name], 'Calendar: ' + p.title);
+  });
+  // 2. files for events that are gone (past a week, taken down, deleted)
+  Object.keys(have).forEach(function (name) {
+    if (/\.ics$/.test(name) && !keep[name]) { ghDelete_(token, 'cal/' + name, have[name], 'Calendar: remove ' + name); summary.deleted.push('cal/' + name); }
+  });
+  // 3. the subscribable calendar
+  put('calendar.ics', icsCalendar_(events, stamp, CAL_NAME), cur && cur.sha, 'Calendar: ' + events.length + ' events');
+  Logger.log(JSON.stringify(summary));
+  return summary;
+}
+
+function icsCalendar_(posts, stamp, name) {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//North Point YSA//northpointysa.com//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'X-WR-CALNAME:' + icsText_(name || CAL_NAME), 'X-WR-TIMEZONE:' + CAL_TZ, 'X-PUBLISHED-TTL:PT1H', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H'];
+  posts.forEach(function (p) { lines.push.apply(lines, icsEvent_(p, stamp)); });
+  lines.push('END:VCALENDAR');
+  return lines.map(icsFold_).join('\r\n') + '\r\n';
+}
+function icsEvent_(p, stamp) {
+  const span = eventSpan_(p);
+  const lines = ['BEGIN:VEVENT', 'UID:post-' + p.id + '@northpointysa.com', 'DTSTAMP:' + stamp];
+  if (span.allDay) lines.push('DTSTART;VALUE=DATE:' + span.start, 'DTEND;VALUE=DATE:' + span.end);
+  else lines.push('DTSTART:' + span.start, 'DTEND:' + span.end);
+  lines.push('SUMMARY:' + icsText_(p.title));
+  if (p.location) lines.push('LOCATION:' + icsText_(p.location));
+  const desc = [String(p.details || '').trim(), p.link ? 'Sign up / details: ' + p.link : '', p.flyer_url ? 'Flyer: ' + p.flyer_url : '', 'Everything, always up to date: ' + SITE].filter(Boolean).join('\n');
+  lines.push('DESCRIPTION:' + icsText_(desc), 'URL:' + (p.link || SITE));
+  const created = Date.parse(p.created_at), updated = Date.parse(p.updated_at || p.reviewed_at || p.created_at);
+  if (created) lines.push('CREATED:' + icsStamp_(new Date(created)));
+  if (updated) lines.push('LAST-MODIFIED:' + icsStamp_(new Date(updated)), 'SEQUENCE:' + Math.max(0, Math.floor((updated - created) / 60000)));
+  lines.push('END:VEVENT');
+  return lines;
+}
+// 'YYYY-MM-DD' + 'HH:MM[:SS]' Eastern -> { allDay, start, end } as calendar stamps (UTC, or dates)
+function eventSpan_(p) {
+  const iso = String(p.event_date).slice(0, 10), parts = iso.split('-').map(Number);
+  if (!p.start_time) {
+    const next = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1));
+    return { allDay: true, start: iso.replace(/-/g, ''), end: Utilities.formatDate(next, 'UTC', 'yyyyMMdd') };
+  }
+  const start = zonedToUtc_(iso, p.start_time);
+  let end = p.end_time ? zonedToUtc_(iso, p.end_time) : new Date(start.getTime() + CAL_DEFAULT_HOURS * 36e5);
+  if (end <= start) end = new Date(end.getTime() + 864e5);     // runs past midnight
+  return { allDay: false, start: icsStamp_(start), end: icsStamp_(end) };
+}
+function zonedToUtc_(iso, time) {
+  const d = iso.split('-').map(Number), t = String(time).split(':').map(Number);
+  const naive = Date.UTC(d[0], d[1] - 1, d[2], t[0], t[1] || 0);            // the wall-clock time, read as if UTC
+  const off = Utilities.formatDate(new Date(naive), CAL_TZ, 'Z');           // e.g. -0400 at that moment
+  const mins = (off[0] === '-' ? -1 : 1) * (Number(off.slice(1, 3)) * 60 + Number(off.slice(3, 5)));
+  return new Date(naive - mins * 60000);
+}
+function icsStamp_(d) { return Utilities.formatDate(d, 'UTC', "yyyyMMdd'T'HHmmss'Z'"); }
+function icsText_(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+function icsFold_(line) {   // RFC 5545: lines over 75 octets continue on the next line after a space
+  const out = []; let l = line;
+  while (l.length > 72) { out.push(l.slice(0, 72)); l = ' ' + l.slice(72); }
+  out.push(l); return out.join('\r\n');
+}
+// git's own id for a file's content, so unchanged files are skipped without an extra download
+function gitBlobSha_(text) {
+  const body = Utilities.newBlob(text).getBytes();
+  const head = Utilities.newBlob('blob ' + body.length + '\0').getBytes();
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, head.concat(body)).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
 }
 
 // ---------- helpers ----------

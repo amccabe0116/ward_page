@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=6">
+  <link rel="stylesheet" href="app.css?v=7">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -94,6 +94,7 @@
         <div class="card" id="post-email-panel" style="margin-top:12px" hidden>
           <div class="inline" style="justify-content:space-between"><h3 style="margin:0">The weekly email, from the posts</h3><button class="chip" id="pe-close">Close</button></div>
           <p class="muted">Everything live on the home page right now, in date order. In LCR (<a href="https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng" target="_blank" rel="noopener">Send a Message</a>): paste the subject, <b>Copy formatted</b> and paste into the message — headings, bold, links and lists come through; images don't, so tick the flyers below, <b>Download selected (.zip)</b>, unzip, and drop the whole set into the Attachments box. <b>Copy plain text</b> is there if you ever need it.</p>
+          <p class="muted small" style="margin:-4px 0 10px">Every event carries <b>Add to calendar</b> links (Google, and an .ics file for Apple / Outlook), and the header points at <a href="calendar.html" target="_blank" rel="noopener">calendar.html</a>, where people subscribe to the whole ward calendar once. The files behind those are published by the Google script whenever a post changes. <button class="chip" id="pe-cal-rebuild" type="button">Rebuild calendar files</button> <span id="pe-cal-msg"></span></p>
           <div class="field"><label for="pe-title">Subject / title</label><input id="pe-title" type="text"></div>
           <div class="field"><label for="pe-header">Top of the email <span class="opt">(the contact-us block — same every week)</span></label><textarea id="pe-header" rows="6"></textarea></div>
           <div class="field"><label for="pe-footer">Bottom of the email</label><textarea id="pe-footer" rows="2"></textarea></div>
@@ -266,7 +267,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=6"></script>
+  <script src="posts.js?v=7"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -567,12 +568,12 @@
         return c;
       }
       async function setPostStatus(p, status) {
-        try { await rpc('admin_post_status', { p_pass: pass, p_id: p.id, p_status: status, p_by: null }); toast(status === 'approved' ? '“' + p.title + '” is on the home page' : status === 'rejected' ? '“' + p.title + '” taken down' : 'Updated'); await loadPosts(); }
+        try { await rpc('admin_post_status', { p_pass: pass, p_id: p.id, p_status: status, p_by: null }); toast(status === 'approved' ? '“' + p.title + '” is on the home page' : status === 'rejected' ? '“' + p.title + '” taken down' : 'Updated'); await loadPosts(); if (p.event_date) pingCalendar(); }
         catch (e) { toast('Failed: ' + e.message, 4000); }
       }
       async function deletePost(p) {
         if (!confirm('Delete “' + p.title + '” for good?')) return;
-        try { await rpc('admin_post_delete', { p_pass: pass, p_id: p.id }); toast('Deleted'); await loadPosts(); } catch (e) { toast('Failed: ' + e.message, 4000); }
+        try { await rpc('admin_post_delete', { p_pass: pass, p_id: p.id }); toast('Deleted'); await loadPosts(); if (p.event_date && p.status === 'approved') pingCalendar(); } catch (e) { toast('Failed: ' + e.message, 4000); }
       }
       function openPostEditor(p) {
         const box = $('post-editor'); box.innerHTML = ''; box.hidden = false;
@@ -585,6 +586,7 @@
             const v = await postForm.finalize();
             const id = await rpc('admin_post_save', { p_pass: pass, p_id: p ? p.id : null, p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_by: null });
             toast(p ? 'Saved' : '“' + v.title + '” is on the home page'); box.hidden = true; box.innerHTML = ''; await loadPosts();
+            if (v.event_date || (p && p.event_date)) pingCalendar();
           } catch (e) { msg.textContent = 'Not saved: ' + (/admin_post_save/.test(e.message) ? 'run supabase/posts.sql first' : e.message); save.disabled = false; }
         } }, p ? 'Save changes' : 'Publish now');
         box.appendChild(el('h3', { style: 'margin:0 0 10px' }, p ? 'Edit post' : 'New post'));
@@ -594,6 +596,25 @@
         postForm.focus();
       }
       $('post-new').addEventListener('click', () => openPostEditor(null));
+
+      // The Google script publishes calendar.ics + cal/<id>.ics from the approved posts (the "Add to
+      // calendar" links and the subscribable ward calendar). Ask it to rebuild right after a change;
+      // it also runs with every 6-hour sheet sync, so a miss here just means a short delay.
+      let calendarBusy = false;
+      async function pingCalendar(btn) {
+        if (!C.sheetsRefreshUrl || calendarBusy) return;
+        calendarBusy = true; const msg = $('pe-cal-msg'); if (btn) { btn.disabled = true; msg.textContent = 'Rebuilding…'; }
+        try {
+          const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'calendar', pass }) }).then(x => x.json());
+          if (!r.ok) throw new Error(r.error || 'unknown error');
+          const n = (r.written || []).length + (r.deleted || []).length;
+          msg.textContent = (n ? n + ' file' + (n === 1 ? '' : 's') + ' updated — live on the site in about a minute.' : 'Already up to date.') + ' ' + r.events + ' event' + (r.events === 1 ? '' : 's') + ' in the ward calendar.';
+        } catch (e) {
+          const t = /unknown action/.test(e.message) ? 'the Google script needs the newest announcements.gs deployed' : e.message;
+          msg.textContent = 'Calendar files not updated: ' + t; if (!btn) toast('Calendar files not updated — ' + t, 5000);
+        } finally { calendarBusy = false; if (btn) btn.disabled = false; }
+      }
+      $('pe-cal-rebuild').addEventListener('click', e => pingCalendar(e.currentTarget));
 
       // ---- the weekly email built from the live posts ----
       let emailSettings = null;

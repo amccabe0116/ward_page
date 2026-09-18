@@ -7,6 +7,7 @@
  *   NPPosts.form(initial, opts)           -> { el, values(), validate(), busy() } the add/edit form
  *   NPPosts.compressImage(file)           -> Promise<Blob>  (JPEG, longest side 1600px)
  *   NPPosts.uploadFlyer(blob)             -> Promise<url>   (Supabase storage bucket "flyers")
+ *   NPPosts.calendarLinks(post)           -> { google, ics }  "Add to calendar" links for a dated post
  *
  * Database side: supabase/posts.sql.
  */
@@ -20,6 +21,7 @@ window.NPPosts = (function () {
   const clock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
   const link = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>';
   const image = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>';
+  const calendar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
 
   // ---- dates & times ----
   function dateParts(iso) {           // 'YYYY-MM-DD' -> { dow, day, mon, long } (no time-zone shift)
@@ -53,18 +55,53 @@ window.NPPosts = (function () {
     return iso === tm ? 'Tomorrow' : '';
   }
 
+  // ---- calendars ----
+  // Times are Eastern wall-clock (config.js timeZone); calendars want UTC instants. Two ways in:
+  // a Google Calendar "template" link (opens the event pre-filled, no file needed) and the .ics
+  // file the Apps Script publishes for every dated post (cal/<id>.ics — Apple, Outlook, everything
+  // else). calendar.html offers the whole ward calendar as a subscription (calendar.ics).
+  const DEFAULT_HOURS = 2;                    // an event with a start and no end
+  function zonedToUtc(iso, time) {            // '2026-09-26', '18:00[:00]' -> Date, the instant in TZ
+    const [y, m, d] = iso.split('-').map(Number); const [hh, mm] = String(time || '00:00').split(':').map(Number);
+    const naive = Date.UTC(y, m - 1, d, hh, mm || 0);
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const q = Object.fromEntries(f.formatToParts(new Date(naive)).map(x => [x.type, x.value]));
+    const asTz = Date.UTC(+q.year, q.month - 1, +q.day, q.hour % 24, +q.minute, +q.second);
+    return new Date(naive - (asTz - naive));
+  }
+  const stampUtc = dt => dt.toISOString().replace(/[-:]|\.\d{3}/g, '');       // 20260926T220000Z
+  function eventSpan(p) {                     // -> { allDay, start, end } in calendar syntax, or null
+    if (!p.event_date) return null;
+    const iso = String(p.event_date).slice(0, 10);
+    if (!p.start_time) { const [y, m, d] = iso.split('-').map(Number); return { allDay: true, start: iso.replace(/-/g, ''), end: new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10).replace(/-/g, '') }; }
+    const start = zonedToUtc(iso, p.start_time);
+    let end = p.end_time ? zonedToUtc(iso, p.end_time) : new Date(start.getTime() + DEFAULT_HOURS * 36e5);
+    if (end <= start) end = new Date(end.getTime() + 864e5);                    // runs past midnight
+    return { allDay: false, start: stampUtc(start), end: stampUtc(end) };
+  }
+  function calendarLinks(p, site) {          // -> { google, ics } or null for an undated notice
+    const span = eventSpan(p); if (!span) return null;
+    site = site || 'https://northpointysa.com';
+    const details = [String(p.details || '').trim(), p.link ? linkLabel(p.link).replace(/ · .*$/, '') + ': ' + p.link : '', 'Everything, always up to date: ' + site].filter(Boolean).join('\n');
+    const q = new URLSearchParams({ action: 'TEMPLATE', text: p.title, dates: span.start + '/' + span.end, details, ctz: TZ });
+    if (p.location) q.set('location', p.location);
+    return { google: 'https://calendar.google.com/calendar/render?' + q.toString(), ics: `${site}/cal/${p.id}.ics` };
+  }
+
   // ---- one post ----
   function card(p, opts) {
     opts = opts || {};
     const dp = dateParts(p.event_date);
     const when = dp ? [relativeDay(p.event_date) || dp.dow, `${dp.mon} ${dp.d}`, timeRange(p)].filter(Boolean).join(' · ') : '';
     const details = String(p.details || '').trim();
+    const cal = p.id ? calendarLinks(p) : null;      // the preview on post.html has no id yet
     const body = el('div', { class: 'post-body' }, [
       dp ? el('div', { class: 'post-when' + (relativeDay(p.event_date) ? ' soon' : '') }, [el('span', { class: 'ic', html: clock }), when]) : null,
       el('h3', { class: 'post-title' }, p.title),
       p.location ? el('div', { class: 'post-where' }, [el('span', { class: 'ic', html: pin }), p.location]) : null,
       details ? el('div', { class: 'post-details', html: linkify(details) }) : null,
       p.link ? el('a', { class: 'post-link', href: p.link, target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: link }), linkLabel(p.link)]) : null,
+      cal ? el('div', { class: 'post-cal' }, [el('span', { class: 'ic', html: calendar }), 'Add to calendar: ', el('a', { href: cal.google, target: '_blank', rel: 'noopener' }, 'Google'), ' · ', el('a', { href: cal.ics }, 'Apple / Outlook')]) : null,
       opts.footer || null,
     ]);
     const art = el('article', { class: 'post' + (p.flyer_url ? ' has-flyer' : ''), 'data-id': p.id }, [
@@ -238,6 +275,7 @@ window.NPPosts = (function () {
         if (p.details) out.push(...String(p.details).trim().split('\n').map(l => '  ' + l));
         if (p.link) out.push('  ' + linkLabel(p.link).replace(/ · .*$/, '') + ': ' + p.link);
         if (p.flyer_url) out.push('  Flyer: ' + p.flyer_url);
+        const cal = calendarLinks(p, site); if (cal) out.push('  Add to calendar: ' + cal.ics);
         out.push('');
       }
     }
@@ -264,6 +302,7 @@ window.NPPosts = (function () {
         if (p.details) lines.push(para(p.details));
         if (p.link) lines.push(`<a href="${esc(p.link)}">${esc(linkLabel(p.link).replace(/ · .*$/, ''))}: ${esc(p.link)}</a>`);
         if (p.flyer_url) lines.push(`<a href="${esc(p.flyer_url)}">Flyer: ${esc(p.flyer_url)}</a>`);
+        const cal = calendarLinks(p, site); if (cal) lines.push(`Add to calendar: <a href="${esc(cal.google)}">Google</a> · <a href="${esc(cal.ics)}">Apple / Outlook</a>`);
         h.push(`<p>${lines.join('<br>')}</p>`);
       }
     }
@@ -312,9 +351,10 @@ WhatsApp chat: ${C.links && C.links.whatsapp || ''}
 Facebook group: ${C.links && C.links.facebook || ''}
 Housing: Hannah Gertson, ward housing specialist — 678-780-1758, hannahgertson@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=housing)
 Jobs: Emerie Elkins, ward employment specialist — 937-657-8439, elkins_ea@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=jobs)
-Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^(WhatsApp chat|Facebook group): \n/gm, ''),
+Meet with the Bishop: https://northpointysa.com/bishop.html
+Ward calendar: subscribe once at https://northpointysa.com/calendar.html and every activity shows up in your own calendar by itself`.replace(/^(WhatsApp chat|Facebook group): \n/gm, ''),
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, EMAIL_DEFAULTS };
 })();

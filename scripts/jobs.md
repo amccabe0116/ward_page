@@ -15,9 +15,19 @@ from a raw `.eml`.
 
 Leaders › Announcements → Email version builds it from the live posts. Send it from LCR's
 Send a Message (https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng): its editor keeps
-h1/h2/bold/links/lists from a formatted paste and drops images, so use Download flyers and drop
-the files into Attachments (jpg/png/pdf, 25 MB each). The Apps Script import of that email keeps
-running but the home page hides the imported text whenever there are posts.
+h1/h2/bold/links/lists from a formatted paste and drops images, so tick the flyers, Download
+selected (.zip), unzip and drop the set into Attachments (jpg/png/pdf/docx/xlsx only — no .ics,
+25 MB each). The Apps Script import of that email keeps running but the home page hides the
+imported text whenever there are posts.
+
+Calendars: every dated post in the email has "Add to calendar: Google · Apple / Outlook" links
+(a calendar.google.com template link, and cal/<id>.ics on the site), and the header invites people
+to subscribe once at calendar.html (calendar.ics — Apple hourly, Google about daily). The .ics files
+are committed by `syncCalendar` in announcements.gs — on every 6-hour sheet sync and straight
+from the Leaders page when a dated post is approved / edited / taken down / deleted (web app
+action `calendar`; "Rebuild calendar files" on the Email version panel does it by hand). An email
+can't put an event into someone's calendar on its own (only registered senders like airlines get
+that from Gmail), so links + the subscription are the whole story.
 
 ## 2. Sync attendance with LCR (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
 

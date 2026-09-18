@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=6">
+  <link rel="stylesheet" href="app.css?v=7">
 </head>
 <body>
   <header class="hero">
@@ -74,6 +74,7 @@
         <a class="chip add-post" href="post.html" id="add-post">+ Share something</a>
       </div>
       <div id="posts"><p class="empty">Loading…</p></div>
+      <p class="cal-hint" id="cal-hint" hidden>Want these in your own calendar? <a href="calendar.html">Subscribe to the ward calendar</a> — new activities show up by themselves.</p>
       <details class="email-block" id="email-block" hidden>
         <summary><span>This week’s announcements email</span><span class="meta" id="ann-meta"></span></summary>
         <div class="card" id="announcements"></div>
@@ -85,7 +86,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="posts.js?v=6"></script>
+  <script src="posts.js?v=7"></script>
   <script>
     (function () {
       const { el, fmtDate, linkify, escapeHtml, icons } = NP;
@@ -145,6 +146,7 @@
         NPPosts.renderPublic(postsBox, rows || []);
         havePosts = (rows || []).length > 0;
         if (havePosts) emailBlock.hidden = true; else emailBlock.open = true;
+        document.getElementById('cal-hint').hidden = !(rows || []).some(p => p.event_date);
       }).catch(() => { postsBox.innerHTML = ''; postsBox.hidden = true; emailBlock.open = true; });
 
       const box = document.getElementById('announcements');

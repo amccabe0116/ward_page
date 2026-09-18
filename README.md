@@ -5,6 +5,8 @@ Sunday roll + weekly announcements for the North Point YSA Ward.
 ```
 index.html          landing: two class buttons + What's happening (posts in date order) + the weekly email
 post.html           share an announcement: anyone can submit a post (with a flyer) for leaders to approve
+calendar.html       subscribe to the ward calendar (calendar.ics) — Apple / Google / Outlook / any URL
+calendar.ics        every approved event, written by the Apps Script (syncCalendar); cal/<id>.ics = one event each
 posts.js            posts shared code: the card, the home-page list, the add/edit form, flyer resize + upload
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
@@ -118,7 +120,15 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    *Download selected (.zip)* fetches them and builds one .zip in the browser (a store-only ZIP
    writer in `posts.js`, files named `01-<title>.jpg` in date order) so they can be unzipped and
    dragged onto LCR's Attachments box in one go; *One by one instead* downloads them
-   separately. The old email import keeps running, but the home page
+   separately. Dated posts also carry **Add to calendar** links, on the home page and in the
+   email: a Google Calendar template link (pre-filled event, no file involved) and `cal/<id>.ics`
+   for Apple / Outlook — Eastern times converted to UTC in `posts.js` (`calendarLinks`). The .ics
+   files, and the subscribable `calendar.ics` behind `calendar.html`, are written into the repo by
+   `syncCalendar` in `scripts/announcements.gs`: at the end of every 6-hour sheet sync and the moment
+   a leader approves, edits, takes down or deletes a dated post (web app action `calendar`, also the
+   *Rebuild calendar files* chip on the Email version panel). Only changed files are committed; an
+   event's own file goes a week after the event, the ward calendar keeps two months of past events.
+   The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were
    copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in
    `supabase/posts.sql` and `posts.js`.
