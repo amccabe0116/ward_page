@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=5">
+  <link rel="stylesheet" href="app.css?v=6">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -93,11 +93,15 @@
         <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
         <div class="card" id="post-email-panel" style="margin-top:12px" hidden>
           <div class="inline" style="justify-content:space-between"><h3 style="margin:0">The weekly email, from the posts</h3><button class="chip" id="pe-close">Close</button></div>
-          <p class="muted">Everything live on the home page right now, in date order. In LCR (<a href="https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng" target="_blank" rel="noopener">Send a Message</a>): paste the subject, <b>Copy formatted</b> and paste into the message — headings, bold, links and lists come through; images don't, so use <b>Download flyers</b> and drop the files into the Attachments box. <b>Copy plain text</b> is there if you ever need it.</p>
+          <p class="muted">Everything live on the home page right now, in date order. In LCR (<a href="https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng" target="_blank" rel="noopener">Send a Message</a>): paste the subject, <b>Copy formatted</b> and paste into the message — headings, bold, links and lists come through; images don't, so tick the flyers below, <b>Download selected (.zip)</b>, unzip, and drop the whole set into the Attachments box. <b>Copy plain text</b> is there if you ever need it.</p>
           <div class="field"><label for="pe-title">Subject / title</label><input id="pe-title" type="text"></div>
           <div class="field"><label for="pe-header">Top of the email <span class="opt">(the contact-us block — same every week)</span></label><textarea id="pe-header" rows="6"></textarea></div>
           <div class="field"><label for="pe-footer">Bottom of the email</label><textarea id="pe-footer" rows="2"></textarea></div>
-          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small secondary" id="pe-flyers">Download flyers</button><button class="btn small secondary" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
+          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small secondary" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
+          <h4 class="pe-title">Flyers to attach</h4>
+          <p class="muted small" style="margin:0 0 8px">Tick the ones to send, then <b>Download selected</b> gives you one .zip — it unzips to a folder, so select all in the folder and drag them onto LCR's Attachments box (or use its Browse button and pick them all at once).</p>
+          <div class="flyer-pick" id="pe-flyer-list"></div>
+          <div class="inline" style="margin-top:8px"><button class="btn small" id="pe-flyers-zip">Download selected (.zip)</button><button class="chip" id="pe-flyers-all">All</button><button class="chip" id="pe-flyers-none">None</button><button class="chip" id="pe-flyers-each">One by one instead</button></div>
           <h4 class="pe-title">Preview</h4>
           <div id="pe-preview" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff"></div>
           <details style="margin-top:12px"><summary class="muted">Plain-text version</summary><textarea id="pe-plain" rows="18" readonly style="width:100%;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px"></textarea></details>
@@ -262,7 +266,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=4"></script>
+  <script src="posts.js?v=5"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -612,6 +616,7 @@
         const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value };
         $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o);
         $('pe-plain').value = NPPosts.emailPlain(livePosts, o);
+        paintFlyerPicker();
         if (!livePosts.length) $('pe-msg').textContent = 'No live posts yet — approve or add some first.';
       }
       ['pe-title', 'pe-header', 'pe-footer'].forEach(id => $(id).addEventListener('input', () => { const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value }; $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o); $('pe-plain').value = NPPosts.emailPlain(livePosts, o); }));
@@ -636,7 +641,27 @@
         } catch (e) { $('pe-msg').textContent = 'Copy failed (' + e.message + ') — select the text below and copy it by hand.'; }
       }
       $('pe-copy-html').addEventListener('click', () => copyEmail(true));
-      $('pe-flyers').addEventListener('click', async () => { $('pe-msg').textContent = 'Downloading…'; const n = await NPPosts.downloadFlyers(livePosts); $('pe-msg').textContent = n ? n + ' flyer' + (n === 1 ? '' : 's') + ' downloaded — drag them into the Attachments box in LCR.' : 'No flyers on the live posts.'; });
+      function paintFlyerPicker() {
+        const box = $('pe-flyer-list'); box.innerHTML = '';
+        const withFlyer = livePosts.filter(p => p.flyer_url);
+        if (!withFlyer.length) { box.appendChild(el('p', { class: 'muted' }, 'No flyers on the live posts.')); return; }
+        withFlyer.forEach(p => box.appendChild(el('label', { class: 'flyer-opt' }, [
+          el('input', { type: 'checkbox', checked: '', 'data-id': p.id }),
+          el('img', { src: p.flyer_url, alt: '' }),
+          el('span', {}, [el('b', {}, p.title), el('span', { class: 'muted small' }, p.event_date ? ' · ' + NPPosts.dateParts(p.event_date).long : '')]),
+        ])));
+      }
+      const pickedFlyers = () => { const ids = new Set([...document.querySelectorAll('#pe-flyer-list input:checked')].map(i => +i.dataset.id)); return livePosts.filter(p => ids.has(p.id)); };
+      async function downloadPicked(zip) {
+        const picked = pickedFlyers(); if (!picked.length) { $('pe-msg').textContent = 'Nothing ticked.'; return; }
+        $('pe-msg').textContent = 'Fetching ' + picked.length + ' flyer' + (picked.length === 1 ? '' : 's') + '…';
+        const r = await NPPosts.downloadFlyers(picked, { zip, name: 'flyers-' + NPPosts.todayIso() });
+        $('pe-msg').textContent = (r.count ? r.count + ' flyer' + (r.count === 1 ? '' : 's') + (zip ? ' in one .zip — unzip, select all, drag onto LCR’s Attachments box.' : ' downloaded.') : 'Nothing downloaded.') + (r.failed.length ? ' Could not fetch: ' + r.failed.join(', ') : '');
+      }
+      $('pe-flyers-zip').addEventListener('click', () => downloadPicked(true));
+      $('pe-flyers-each').addEventListener('click', () => downloadPicked(false));
+      $('pe-flyers-all').addEventListener('click', () => document.querySelectorAll('#pe-flyer-list input').forEach(i => { i.checked = true; }));
+      $('pe-flyers-none').addEventListener('click', () => document.querySelectorAll('#pe-flyer-list input').forEach(i => { i.checked = false; }));
       $('pe-copy-text').addEventListener('click', () => copyEmail(false));
 
       // ---- settings ----

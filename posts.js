@@ -271,20 +271,40 @@ window.NPPosts = (function () {
     h.push(`<p>Everything, always up to date: <a href="${site}">${site.replace(/^https?:\/\//, '')}</a></p>`);
     return h.join('\n');
   }
-  // "Download flyers": every live flyer as a file, named after its post, so they can be dropped
-  // into the email's Attachments box (LCR: jpg/png/pdf up to 25 MB each).
-  async function downloadFlyers(posts) {
-    const withFlyer = posts.filter(p => p.flyer_url); let n = 0;
-    for (const p of withFlyer) {
-      try {
-        const r = await fetch(p.flyer_url); if (!r.ok) throw new Error(r.status);
-        const blob = await r.blob(); const ext = /png/.test(blob.type) ? 'png' : 'jpg';
-        const name = String(++n).padStart(2, '0') + '-' + p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.' + ext;
-        const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.appendChild(a); a.click(); a.remove();
-        await new Promise(r => setTimeout(r, 400));
-      } catch (e) { window.open(p.flyer_url, '_blank'); }
+  // ---- flyers as email attachments ----
+  const fileNameFor = (p, i, ext) => String(i).padStart(2, '0') + '-' + p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.' + ext;
+  async function fetchFlyer(p, i) {
+    const r = await fetch(p.flyer_url); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob(); const ext = /png/.test(blob.type) ? 'png' : /pdf/.test(blob.type) ? 'pdf' : 'jpg';
+    return { name: fileNameFor(p, i, ext), blob };
+  }
+  function saveBlob(blob, name) { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
+  // A tiny ZIP writer (store only — flyers are JPEGs, already compressed), so all the attachments
+  // arrive as ONE download that unzips to a folder: select all, drag onto LCR's Attachments box.
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+  async function zipFiles(files) {           // files: [{ name, blob }]
+    const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+    const now = new Date(); const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1), dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const u16 = v => [v & 255, (v >> 8) & 255], u32 = v => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
+    for (const f of files) {
+      const data = new Uint8Array(await f.blob.arrayBuffer()), name = enc.encode(f.name), crc = crc32(data);
+      const head = new Uint8Array([0x50, 0x4b, 3, 4, ...u16(20), ...u16(0x800), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...name]);
+      parts.push(head, data);
+      central.push(new Uint8Array([0x50, 0x4b, 1, 2, ...u16(20), ...u16(20), ...u16(0x800), ...u16(0), ...u16(dosTime), ...u16(dosDate), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset), ...name]));
+      offset += head.length + data.length;
     }
-    return n;
+    const cdSize = central.reduce((a, c) => a + c.length, 0);
+    const end = new Uint8Array([0x50, 0x4b, 5, 6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cdSize), ...u32(offset), ...u16(0)]);
+    return new Blob([...parts, ...central, end], { type: 'application/zip' });
+  }
+  // Download the given posts' flyers as one .zip (or one file at a time when zip is false).
+  async function downloadFlyers(posts, opts) {
+    opts = opts || {}; const withFlyer = posts.filter(p => p.flyer_url); const files = []; const failed = [];
+    for (let i = 0; i < withFlyer.length; i++) { try { files.push(await fetchFlyer(withFlyer[i], i + 1)); } catch (e) { failed.push(withFlyer[i].title); } }
+    if (opts.zip === false) { for (const f of files) { saveBlob(f.blob, f.name); await new Promise(r => setTimeout(r, 400)); } }
+    else if (files.length) saveBlob(await zipFiles(files), (opts.name || 'flyers') + '.zip');
+    return { count: files.length, failed };
   }
   const EMAIL_DEFAULTS = {
     header: `Ward text list: text your name and “please add me” to 770-470-3577
@@ -296,5 +316,5 @@ Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^(WhatsApp
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, EMAIL_DEFAULTS };
 })();

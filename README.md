@@ -112,8 +112,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    the live posts — a fixed contact-us block on top (text list, WhatsApp, Facebook, the housing
    and employment specialists, notes to leadership, meeting the Bishop; editable, saved as
    settings `posts_email_header` / `posts_email_footer`), then *Coming up* and *Announcements*,
-   then an invitation to post at `post.html` — with *Copy formatted* (HTML with images) and
-   *Copy plain text* (for LCR's composer). The old email import keeps running, but the home page
+   then an invitation to post at `post.html` — with *Copy formatted* (HTML: headings, bold, links
+   and lists survive a paste into LCR's *Send a Message* editor; images don't) and *Copy plain
+   text*. Under *Flyers to attach*, the live posts' flyers are listed as a checklist (all ticked):
+   *Download selected (.zip)* fetches them and builds one .zip in the browser (a store-only ZIP
+   writer in `posts.js`, files named `01-<title>.jpg` in date order) so they can be unzipped and
+   dragged onto LCR's Attachments box in one go; *One by one instead* downloads them
+   separately. The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were
    copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in
    `supabase/posts.sql` and `posts.js`.

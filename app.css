@@ -499,3 +499,9 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .post-actions .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: #cfe9d8; }
 .post-queue-title { font-family: var(--serif); font-size: 18px; margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; }
 .post-queue-title .pill { font-size: 12px; }
+
+/* Email version: flyer picker */
+.flyer-pick { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.flyer-opt { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--card); cursor: pointer; font-size: 14px; }
+.flyer-opt input { width: 18px; height: 18px; accent-color: var(--navy); flex: none; }
+.flyer-opt img { width: 36px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex: none; }
