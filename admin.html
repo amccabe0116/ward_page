@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=7">
+  <link rel="stylesheet" href="app.css?v=8">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -267,7 +267,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=7"></script>
+  <script src="posts.js?v=8"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -536,10 +536,11 @@
         const box = $('post-queue'); box.innerHTML = '';
         const today = NPPosts.todayIso();
         const pending = posts.filter(p => p.status === 'pending');
-        const live = posts.filter(p => p.status === 'approved' && (!p.event_date || p.event_date >= today));
+        const stillRepeating = p => p.repeat && (!p.repeat_until || p.repeat_until >= today);
+        const live = posts.filter(p => p.status === 'approved' && (!p.event_date || p.event_date >= today || stillRepeating(p)));
         // an event leaves the home page the day after it happens; here it lingers two weeks, then goes
         const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
-        const past = posts.filter(p => p.status === 'approved' && p.event_date && p.event_date < today && p.event_date >= cutoff);
+        const past = posts.filter(p => p.status === 'approved' && p.event_date && !stillRepeating(p) && (p.repeat ? p.repeat_until : p.event_date) < today && (p.repeat ? p.repeat_until : p.event_date) >= cutoff);
         const rejected = posts.filter(p => p.status === 'rejected');
         $('posts-badge').textContent = pending.length; $('posts-badge').hidden = !pending.length;
         const section = (title, list, cls, empty) => {
@@ -563,9 +564,23 @@
           p.status === 'pending' ? b('Reject', 'danger', () => setPostStatus(p, 'rejected')) : null,
           p.status !== 'pending' ? b('Delete', 'danger', () => deletePost(p)) : null,
         ];
-        const c = NPPosts.card(p, { footer: el('div', {}, [el('div', { class: 'post-meta' }, meta), el('div', { class: 'post-actions' }, actions)]) });
+        const c = NPPosts.card(p, { footer: el('div', {}, [el('div', { class: 'post-meta' }, meta), p.repeat && p.status !== 'rejected' ? skipRow(p) : null, el('div', { class: 'post-actions' }, actions)]) });
         c.classList.add(p.status);
         return c;
+      }
+      // Upcoming dates of a repeating post, each a toggle: tap to cancel that one date (it shows as
+      // cancelled on the site and in the email, and drops out of subscribed calendars), tap again to restore.
+      function skipRow(p) {
+        const occ = NPPosts.occurrences(p, 4);
+        if (!occ.length) return el('p', { class: 'muted small' }, 'No dates left in this series.');
+        return el('div', { class: 'post-skips' }, [el('span', { class: 'muted small' }, 'Upcoming — tap a date to cancel it:'), ...occ.map(o => {
+          const dp = NPPosts.dateParts(o.date);
+          return el('button', { class: 'chip' + (o.cancelled ? ' skipped' : ''), type: 'button', title: o.cancelled ? 'Cancelled — tap to put it back' : 'Cancel this one date', onclick: async e => {
+            e.currentTarget.disabled = true;
+            try { p.skip_dates = await rpc('admin_post_skip', { p_pass: pass, p_id: p.id, p_date: o.date, p_skip: !o.cancelled }) || []; toast(o.cancelled ? dp.mon + ' ' + dp.d + ' is back on' : dp.mon + ' ' + dp.d + ' cancelled'); renderPosts(); if (p.status === 'approved') pingCalendar(); }
+            catch (err) { e.currentTarget.disabled = false; toast('Failed: ' + (/admin_post_skip/.test(err.message) ? 'run supabase/repeat.sql first' : err.message), 4000); }
+          } }, (o.cancelled ? '✕ ' : '') + dp.dow.slice(0, 3) + ' ' + dp.mon + ' ' + dp.d);
+        })]);
       }
       async function setPostStatus(p, status) {
         try { await rpc('admin_post_status', { p_pass: pass, p_id: p.id, p_status: status, p_by: null }); toast(status === 'approved' ? '“' + p.title + '” is on the home page' : status === 'rejected' ? '“' + p.title + '” taken down' : 'Updated'); await loadPosts(); if (p.event_date) pingCalendar(); }
@@ -582,12 +597,16 @@
         const save = el('button', { class: 'btn small', type: 'button', onclick: async () => {
           const bad = postForm.validate(); if (bad) { msg.textContent = bad; return; }
           save.disabled = true; msg.textContent = 'Saving…';
+          let v = postForm.values();
           try {
-            const v = await postForm.finalize();
-            const id = await rpc('admin_post_save', { p_pass: pass, p_id: p ? p.id : null, p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_by: null });
+            v = await postForm.finalize();
+            // the repeat fields only go along when used (or being cleared), so plain posts still save before supabase/repeat.sql is run
+            const withRepeat = v.repeat || (p && p.repeat);
+            const id = await rpc('admin_post_save', Object.assign({ p_pass: pass, p_id: p ? p.id : null, p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_by: null },
+              withRepeat ? { p_repeat: v.repeat, p_repeat_until: v.repeat_until, p_repeat_show: v.repeat_show } : {}));
             toast(p ? 'Saved' : '“' + v.title + '” is on the home page'); box.hidden = true; box.innerHTML = ''; await loadPosts();
             if (v.event_date || (p && p.event_date)) pingCalendar();
-          } catch (e) { msg.textContent = 'Not saved: ' + (/admin_post_save/.test(e.message) ? 'run supabase/posts.sql first' : e.message); save.disabled = false; }
+          } catch (e) { msg.textContent = 'Not saved: ' + (/admin_post_save/.test(e.message) ? (v.repeat ? 'run supabase/repeat.sql first (repeating posts)' : 'run supabase/posts.sql first') : e.message); save.disabled = false; }
         } }, p ? 'Save changes' : 'Publish now');
         box.appendChild(el('h3', { style: 'margin:0 0 10px' }, p ? 'Edit post' : 'New post'));
         box.appendChild(postForm.el);

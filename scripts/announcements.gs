@@ -493,7 +493,8 @@ function isLeader_(pass) {
 // "calendar") after a post is approved, edited, taken down or deleted. Only files whose content
 // actually changed are committed, so a run with nothing new makes no commits at all.
 // Times: posts hold Eastern wall-clock times; the files carry UTC instants, which every calendar
-// understands without a VTIMEZONE block.
+// understands without a VTIMEZONE block. A repeating post is one VEVENT with an RRULE (and an
+// EXDATE per cancelled date), so subscribers get the whole series and see cancellations.
 const SITE = 'https://northpointysa.com';
 const CAL_TZ = 'America/New_York';
 const CAL_NAME = 'North Point YSA';
@@ -513,9 +514,11 @@ function syncCalendar() {
   const all = JSON.parse(res.getContentText() || '[]');
   const today = Utilities.formatDate(new Date(), CAL_TZ, 'yyyy-MM-dd');
   const dayIso = function (daysAgo) { return Utilities.formatDate(new Date(Date.now() - daysAgo * 864e5), CAL_TZ, 'yyyy-MM-dd'); };
-  const events = all.filter(function (p) { return p.status === 'approved' && p.event_date && String(p.event_date).slice(0, 10) >= dayIso(CAL_PAST_DAYS); })
+  // a repeating post (supabase/repeat.sql) stays while its series is running
+  const alive = function (p, cutoff) { return String(p.event_date).slice(0, 10) >= cutoff || (p.repeat && (!p.repeat_until || String(p.repeat_until).slice(0, 10) >= cutoff)); };
+  const events = all.filter(function (p) { return p.status === 'approved' && p.event_date && alive(p, dayIso(CAL_PAST_DAYS)); })
     .sort(function (a, b) { return (a.event_date + (a.start_time || '')) < (b.event_date + (b.start_time || '')) ? -1 : 1; });
-  const linked = events.filter(function (p) { return String(p.event_date).slice(0, 10) >= dayIso(CAL_LINK_PAST_DAYS); });
+  const linked = events.filter(function (p) { return alive(p, dayIso(CAL_LINK_PAST_DAYS)); });
   const stamp = icsStamp_(new Date());
   const summary = { events: events.length, links: linked.length, written: [], deleted: [], unchanged: 0 };
 
@@ -558,6 +561,11 @@ function icsEvent_(p, stamp) {
   const lines = ['BEGIN:VEVENT', 'UID:post-' + p.id + '@northpointysa.com', 'DTSTAMP:' + stamp];
   if (span.allDay) lines.push('DTSTART;VALUE=DATE:' + span.start, 'DTEND;VALUE=DATE:' + span.end);
   else lines.push('DTSTART:' + span.start, 'DTEND:' + span.end);
+  const rule = rrule_(p); if (rule) lines.push('RRULE:' + rule);
+  (p.skip_dates || []).forEach(function (d) {      // cancelled occurrences
+    const iso = String(d).slice(0, 10);
+    lines.push(span.allDay ? 'EXDATE;VALUE=DATE:' + iso.replace(/-/g, '') : 'EXDATE:' + icsStamp_(zonedToUtc_(iso, p.start_time)));
+  });
   lines.push('SUMMARY:' + icsText_(p.title));
   if (p.location) lines.push('LOCATION:' + icsText_(p.location));
   const desc = [String(p.details || '').trim(), p.link ? 'Sign up / details: ' + p.link : '', p.flyer_url ? 'Flyer: ' + p.flyer_url : '', 'Everything, always up to date: ' + SITE].filter(Boolean).join('\n');
@@ -586,6 +594,15 @@ function zonedToUtc_(iso, time) {
   const off = Utilities.formatDate(new Date(naive), CAL_TZ, 'Z');           // e.g. -0400 at that moment
   const mins = (off[0] === '-' ? -1 : 1) * (Number(off.slice(1, 3)) * 60 + Number(off.slice(3, 5)));
   return new Date(naive - mins * 60000);
+}
+// weekly / every 2 weeks / monthly on the same weekday (1st Tuesday…), optionally until a date
+function rrule_(p) {
+  if (!p.repeat) return '';
+  const d = String(p.event_date).slice(0, 10).split('-').map(Number), BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  const dow = new Date(Date.UTC(d[0], d[1] - 1, d[2])).getUTCDay(), ord = Math.min(5, Math.ceil(d[2] / 7));
+  let rule = p.repeat === 'monthly' ? 'FREQ=MONTHLY;BYDAY=' + (ord === 5 ? -1 : ord) + BYDAY[dow] : 'FREQ=WEEKLY;' + (p.repeat === 'biweekly' ? 'INTERVAL=2;' : '') + 'BYDAY=' + BYDAY[dow];
+  if (p.repeat_until) { const u = String(p.repeat_until).slice(0, 10); rule += ';UNTIL=' + (p.start_time ? icsStamp_(zonedToUtc_(u, '23:59')) : u.replace(/-/g, '')); }
+  return rule;
 }
 function icsStamp_(d) { return Utilities.formatDate(d, 'UTC', "yyyyMMdd'T'HHmmss'Z'"); }
 function icsText_(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }

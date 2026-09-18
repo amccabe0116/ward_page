@@ -36,6 +36,7 @@ supabase/flags.sql                Flag column (Warning/Magnet), row deletion, me
 supabase/keys.sql                 high-score board for the mini game (keys_submit / keys_top / admin_keys_delete)
 supabase/addrow.sql               Add to sheet: lets the site pre-fill the callings sheet's intake columns
 supabase/posts.sql                posts (events / notices with flyers), public submission, approval, the "flyers" storage bucket
+supabase/repeat.sql               repeating posts (weekly / every 2 weeks / monthly), cancelling one date
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -128,6 +129,14 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    a leader approves, edits, takes down or deletes a dated post (web app action `calendar`, also the
    *Rebuild calendar files* chip on the Email version panel). Only changed files are committed; an
    event's own file goes a week after the event, the ward calendar keeps two months of past events.
+   **Repeating posts** (`supabase/repeat.sql`): a post can repeat every week, every 2 weeks or
+   monthly on the same weekday (1st Tuesday…), optionally until a date; its `event_date` is the
+   first occurrence. The site works out the upcoming dates itself (`occurrences()` in posts.js) and
+   shows only the next few (*Show the next* 1–4, default 2): the first as a full card, the rest as
+   compact one-liners slotted into the date order — same in the email. Leaders can cancel a single
+   date from the card (*Upcoming — tap a date to cancel it*, `admin_post_skip` → `skip_dates`): the
+   site and email show it as cancelled, and the calendar files carry the series as one event with an
+   `RRULE` plus an `EXDATE` per cancelled date, so subscribers see the whole run and the gaps.
    The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were
    copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in

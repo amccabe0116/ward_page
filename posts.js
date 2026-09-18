@@ -8,6 +8,8 @@
  *   NPPosts.compressImage(file)           -> Promise<Blob>  (JPEG, longest side 1600px)
  *   NPPosts.uploadFlyer(blob)             -> Promise<url>   (Supabase storage bucket "flyers")
  *   NPPosts.calendarLinks(post)           -> { google, ics }  "Add to calendar" links for a dated post
+ *   NPPosts.occurrences(post, n)          -> [{ date, cancelled? }] the next n dates of a (repeating) post
+ *   NPPosts.expand(posts)                 -> the list with repeating posts turned into their upcoming dates
  *
  * Database side: supabase/posts.sql.
  */
@@ -55,6 +57,65 @@ window.NPPosts = (function () {
     return iso === tm ? 'Tomorrow' : '';
   }
 
+  // ---- repeats ----
+  // A post can repeat (weekly / every 2 weeks / monthly on the same weekday, e.g. 1st Tuesday) from
+  // its event_date. The site works out the upcoming dates here and shows only the next few
+  // (repeat_show, 1–4); a date in skip_dates is cancelled — shown as such, not silently dropped.
+  const ORD = ['1st', '2nd', '3rd', '4th', 'last'], BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+  function nthWeekday(y, m, dow, ord) {       // m 1–12, ord 1–4 or 5 = last -> 'YYYY-MM-DD'
+    if (ord === 5) { const last = new Date(Date.UTC(y, m, 0)); return new Date(Date.UTC(y, m, 0 - ((last.getUTCDay() - dow + 7) % 7))).toISOString().slice(0, 10); }
+    const first = new Date(Date.UTC(y, m - 1, 1));
+    return new Date(Date.UTC(y, m - 1, 1 + ((dow - first.getUTCDay() + 7) % 7) + (ord - 1) * 7)).toISOString().slice(0, 10);
+  }
+  function repeatInfo(p) {                    // the series' weekday + ordinal-in-month, from the first date
+    const dp = dateParts(p.event_date); if (!dp || !p.repeat) return null;
+    return { dow: new Date(Date.UTC(dp.y, dp.m - 1, dp.d)).getUTCDay(), dowName: dp.dow, ord: Math.min(5, Math.ceil(dp.d / 7)) };
+  }
+  function repeatLabel(p) {                   // 'Every Tuesday' / 'Every other Tuesday' / 'Every 1st Tuesday'
+    const r = repeatInfo(p); if (!r) return '';
+    return p.repeat === 'weekly' ? 'Every ' + r.dowName : p.repeat === 'biweekly' ? 'Every other ' + r.dowName : 'Every ' + ORD[r.ord - 1] + ' ' + r.dowName;
+  }
+  // Upcoming dates from `from` (today): the next `count` real ones, plus any cancelled ones met on
+  // the way, flagged. [{ date, cancelled? }]. A one-off post is its own single occurrence.
+  function occurrences(p, count, from) {
+    if (!p.event_date) return [];
+    from = from || todayIso(); count = count || p.repeat_show || 2;
+    const start = String(p.event_date).slice(0, 10);
+    if (!p.repeat) return start >= from ? [{ date: start }] : [];
+    const skip = new Set((p.skip_dates || []).map(d => String(d).slice(0, 10)));
+    const until = p.repeat_until ? String(p.repeat_until).slice(0, 10) : null;
+    const r = repeatInfo(p), dp = dateParts(start);
+    const nth = k => p.repeat === 'weekly' ? addDays(start, 7 * k) : p.repeat === 'biweekly' ? addDays(start, 14 * k)
+      : nthWeekday(dp.y + Math.floor((dp.m - 1 + k) / 12), ((dp.m - 1 + k) % 12) + 1, r.dow, r.ord);
+    const out = []; let real = 0;
+    for (let k = 0; k < 2000 && real < count; k++) {
+      const d = nth(k);
+      if (until && d > until) break;
+      if (d < from) continue;
+      if (skip.has(d)) out.push({ date: d, cancelled: true }); else { out.push({ date: d }); real++; }
+    }
+    return out;
+  }
+  // The list to show: every dated post becomes its upcoming occurrence(s) — copies of the post with
+  // that date, `series` pointing back, `nth` (0 = the first shown) and `cancelled` — sorted by date;
+  // undated notices keep their place at the end.
+  function expand(posts, from) {
+    const dated = [], undated = [];
+    for (const p of posts) {
+      if (!p.event_date) { undated.push(p); continue; }
+      occurrences(p, p.repeat_show, from).forEach((o, i) => dated.push(Object.assign({}, p, { event_date: o.date, series: p, nth: i, cancelled: !!o.cancelled })));
+    }
+    dated.sort((a, b) => (a.event_date + (a.start_time || '')) < (b.event_date + (b.start_time || '')) ? -1 : 1);
+    return dated.concat(undated);
+  }
+  function rrule(p) {                         // RFC 5545 rule for the series (Google's template link and the .ics both take it)
+    const r = repeatInfo(p); if (!r) return '';
+    let rule = p.repeat === 'monthly' ? `FREQ=MONTHLY;BYDAY=${r.ord === 5 ? -1 : r.ord}${BYDAY[r.dow]}` : `FREQ=WEEKLY;${p.repeat === 'biweekly' ? 'INTERVAL=2;' : ''}BYDAY=${BYDAY[r.dow]}`;
+    if (p.repeat_until) { const u = String(p.repeat_until).slice(0, 10); rule += ';UNTIL=' + (p.start_time ? stampUtc(zonedToUtc(u, '23:59')) : u.replace(/-/g, '')); }
+    return rule;
+  }
+
   // ---- calendars ----
   // Times are Eastern wall-clock (config.js timeZone); calendars want UTC instants. Two ways in:
   // a Google Calendar "template" link (opens the event pre-filled, no file needed) and the .ics
@@ -85,31 +146,39 @@ window.NPPosts = (function () {
     const details = [String(p.details || '').trim(), p.link ? linkLabel(p.link).replace(/ · .*$/, '') + ': ' + p.link : '', 'Everything, always up to date: ' + site].filter(Boolean).join('\n');
     const q = new URLSearchParams({ action: 'TEMPLATE', text: p.title, dates: span.start + '/' + span.end, details, ctz: TZ });
     if (p.location) q.set('location', p.location);
+    const rule = rrule(p); if (rule) q.set('recur', 'RRULE:' + rule);
     return { google: 'https://calendar.google.com/calendar/render?' + q.toString(), ics: `${site}/cal/${p.id}.ics` };
   }
 
   // ---- one post ----
   function card(p, opts) {
     opts = opts || {};
+    // a repeating post that hasn't been expanded (leaders' list, the preview) shows its next date
+    if (p.repeat && !p.series && p.event_date) { const next = occurrences(p, 1).find(o => !o.cancelled); if (next) p = Object.assign({}, p, { event_date: next.date, series: p, nth: 0 }); }
+    const series = p.series && p.series.repeat ? p.series : null;
+    const compact = !!series && (p.nth > 0 || p.cancelled);     // later occurrences: one line each
     const dp = dateParts(p.event_date);
     const when = dp ? [relativeDay(p.event_date) || dp.dow, `${dp.mon} ${dp.d}`, timeRange(p)].filter(Boolean).join(' · ') : '';
     const details = String(p.details || '').trim();
-    const cal = p.id ? calendarLinks(p) : null;      // the preview on post.html has no id yet
+    const cal = p.id && !p.cancelled ? calendarLinks(p) : null;      // the preview on post.html has no id yet
     const body = el('div', { class: 'post-body' }, [
-      dp ? el('div', { class: 'post-when' + (relativeDay(p.event_date) ? ' soon' : '') }, [el('span', { class: 'ic', html: clock }), when]) : null,
+      dp ? el('div', { class: 'post-when-row' }, [
+        el('div', { class: 'post-when' + (p.cancelled ? ' cancelled' : relativeDay(p.event_date) ? ' soon' : '') }, [el('span', { class: 'ic', html: clock }), p.cancelled ? 'Cancelled · ' + when : when]),
+        series ? el('span', { class: 'post-repeat', title: 'This post repeats' }, repeatLabel(series)) : null,
+      ]) : null,
       el('h3', { class: 'post-title' }, p.title),
-      p.location ? el('div', { class: 'post-where' }, [el('span', { class: 'ic', html: pin }), p.location]) : null,
-      details ? el('div', { class: 'post-details', html: linkify(details) }) : null,
-      p.link ? el('a', { class: 'post-link', href: p.link, target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: link }), linkLabel(p.link)]) : null,
+      p.location && !p.cancelled ? el('div', { class: 'post-where' }, [el('span', { class: 'ic', html: pin }), p.location]) : null,
+      details && !compact ? el('div', { class: 'post-details', html: linkify(details) }) : null,
+      p.link && !compact ? el('a', { class: 'post-link', href: p.link, target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: link }), linkLabel(p.link)]) : null,
       cal ? el('div', { class: 'post-cal' }, [el('span', { class: 'ic', html: calendar }), 'Add to calendar: ', el('a', { href: cal.google, target: '_blank', rel: 'noopener' }, 'Google'), ' · ', el('a', { href: cal.ics }, 'Apple / Outlook')]) : null,
       opts.footer || null,
     ]);
-    const art = el('article', { class: 'post' + (p.flyer_url ? ' has-flyer' : ''), 'data-id': p.id }, [
-      p.flyer_url ? el('a', { class: 'post-flyer', href: p.flyer_url, target: '_blank', rel: 'noopener', title: 'Open the flyer' }, el('img', { src: p.flyer_url, alt: p.title + ' flyer', loading: 'lazy' })) : null,
+    const art = el('article', { class: 'post' + (p.flyer_url && !compact ? ' has-flyer' : '') + (compact ? ' compact' : '') + (p.cancelled ? ' is-cancelled' : ''), 'data-id': p.id, 'data-date': p.event_date || null }, [
+      p.flyer_url && !compact ? el('a', { class: 'post-flyer', href: p.flyer_url, target: '_blank', rel: 'noopener', title: 'Open the flyer' }, el('img', { src: p.flyer_url, alt: p.title + ' flyer', loading: 'lazy' })) : null,
       body,
     ]);
     // long details start folded
-    if (details.length > 260 || details.split('\n').length > 5) {
+    if (!compact && (details.length > 260 || details.split('\n').length > 5)) {
       const d = body.querySelector('.post-details'); d.classList.add('folded');
       const more = el('button', { class: 'post-more', type: 'button', onclick: () => { d.classList.toggle('folded'); more.textContent = d.classList.contains('folded') ? 'Read more' : 'Show less'; } }, 'Read more');
       d.after(more);
@@ -124,7 +193,7 @@ window.NPPosts = (function () {
   // ---- the home page list ----
   function renderPublic(box, posts) {
     box.innerHTML = '';
-    const dated = posts.filter(p => p.event_date), undated = posts.filter(p => !p.event_date);
+    const all = expand(posts), dated = all.filter(p => p.event_date), undated = all.filter(p => !p.event_date);
     if (!posts.length) { box.appendChild(el('p', { class: 'empty' }, 'Nothing posted yet — check back soon, or add something below.')); return; }
     if (dated.length) {
       const list = el('div', { class: 'post-list' });
@@ -182,6 +251,7 @@ window.NPPosts = (function () {
     const field = (key, label, input, hint) => el('div', { class: 'field' }, [el('label', { for: 'pf-' + key }, [label, hint ? el('span', { class: 'opt' }, ' ' + hint) : null]), input]);
     const inp = (key, attrs) => { const n = el('input', Object.assign({ id: 'pf-' + key }, attrs)); $f[key] = n; return n; };
     const ta = (key, attrs) => { const n = el('textarea', Object.assign({ id: 'pf-' + key }, attrs)); $f[key] = n; return n; };
+    const sel = (key, options, value) => { const n = el('select', { id: 'pf-' + key }, options.map(([v, t]) => el('option', { value: v, selected: String(v) === String(value) ? '' : null }, t))); $f[key] = n; return n; };
     const t5 = t => t ? String(t).slice(0, 5) : '';
 
     // flyer picker with preview
@@ -210,6 +280,11 @@ window.NPPosts = (function () {
         field('start', 'Starts', inp('start', { type: 'time', value: t5(initial.start_time) }), '(optional)'),
         field('end', 'Ends', inp('end', { type: 'time', value: t5(initial.end_time) }), '(optional)'),
       ]),
+      el('div', { class: 'inline wrap2 repeat-row' }, [
+        field('repeat', 'Repeats', sel('repeat', [['', 'Doesn’t repeat'], ['weekly', 'Every week'], ['biweekly', 'Every 2 weeks'], ['monthly', 'Every month, same weekday']], initial.repeat || '')),
+        field('show', 'Show the next', sel('show', [[1, '1'], [2, '2'], [3, '3'], [4, '4']], initial.repeat_show || 2), '(dates at a time)'),
+        field('until', 'Until', inp('until', { type: 'date', value: initial.repeat_until ? String(initial.repeat_until).slice(0, 10) : '' }), '(optional)'),
+      ]),
       field('location', 'Where', inp('location', { type: 'text', maxlength: 200, placeholder: 'Roswell building · 500 Norcross St', value: initial.location || '' }), '(optional)'),
       field('details', 'Details', ta('details', { rows: 5, maxlength: 3000, placeholder: 'What, who it’s for, what to bring…' }), '(optional)'),
       field('link', 'Link', inp('link', { type: 'url', maxlength: 500, placeholder: 'https://… sign-up form or more info', value: initial.link || '', inputmode: 'url' }), '(optional)'),
@@ -225,12 +300,17 @@ window.NPPosts = (function () {
       opts.askWho ? el('div', { style: 'position:absolute;left:-9999px;top:-9999px', 'aria-hidden': 'true' }, inp('website', { type: 'text', tabindex: -1, autocomplete: 'off', placeholder: 'Leave this empty' })) : null,
     ]);
     $f.details.value = initial.details || '';
+    // "show the next" and "until" only matter for a repeating post
+    const repeatExtras = () => { const on = !!$f.repeat.value; $f.show.closest('.field').hidden = !on; $f.until.closest('.field').hidden = !on; };
+    $f.repeat.addEventListener('change', repeatExtras); repeatExtras();
 
     function values() {
       const v = k => ($f[k] ? $f[k].value : '').trim();
+      const repeat = v('repeat') || null;
       return {
         title: v('title'), details: $f.details.value.trim(), event_date: v('date') || null, start_time: v('start') || null, end_time: v('end') || null,
         location: v('location'), link: v('link'), flyer_url: flyerUrl, name: v('name'), contact: v('contact'), website: v('website'),
+        repeat, repeat_until: repeat ? v('until') || null : null, repeat_show: repeat ? +v('show') || 2 : 2,
       };
     }
     function validate() {
@@ -238,6 +318,8 @@ window.NPPosts = (function () {
       if (x.title.length < 3) return 'Please give it a title.';
       if (x.link && !/^https?:\/\//i.test(x.link)) return 'The link needs to start with http:// or https://';
       if (x.start_time && x.end_time && x.end_time < x.start_time) return 'The end time is before the start time.';
+      if (x.repeat && !x.event_date) return 'A repeating post needs its first date.';
+      if (x.repeat && x.repeat_until && x.repeat_until < x.event_date) return 'The “until” date is before the first date.';
       if (opts.askWho && x.name.length < 2) return 'Please add your name.';
       if (opts.askWho && x.contact.length < 5) return 'Please add an email or phone number so a leader can reach you.';
       if (flyerBusy) return 'The flyer is still being prepared — one moment.';
@@ -254,9 +336,10 @@ window.NPPosts = (function () {
   // ---- the weekly email, built from the posts ----
   // o: { header, footer, site } — header/footer are plain text (URLs get linked in the HTML version).
   function emailSections(posts) {
-    const dated = posts.filter(p => p.event_date), undated = posts.filter(p => !p.event_date);
+    const all = expand(posts), dated = all.filter(p => p.event_date), undated = all.filter(p => !p.event_date);
     return [['Coming up', dated], ['Announcements', undated]].filter(([, l]) => l.length);
   }
+  const seriesNote = p => p.series && p.series.repeat ? ' (' + repeatLabel(p.series).replace(/^Every/, 'every') + ')' : '';
   function whenLine(p) {
     const dp = dateParts(p.event_date); if (!dp) return '';
     return `${dp.dow}, ${dp.mon} ${dp.d}` + (timeRange(p) ? ' · ' + timeRange(p) : '');
@@ -270,7 +353,9 @@ window.NPPosts = (function () {
       out.push(name.toUpperCase(), '');
       for (const p of list) {
         const w = whenLine(p);
-        out.push((w ? w + ' — ' : '') + p.title);
+        if (p.cancelled) { out.push((w ? w + ' — ' : '') + p.title + ': CANCELLED this time', ''); continue; }
+        if (p.nth > 0) { out.push((w ? w + ' — ' : '') + p.title + (p.location ? ' · ' + p.location : ''), ''); continue; }
+        out.push((w ? w + ' — ' : '') + p.title + seriesNote(p));
         if (p.location) out.push('  ' + p.location);
         if (p.details) out.push(...String(p.details).trim().split('\n').map(l => '  ' + l));
         if (p.link) out.push('  ' + linkLabel(p.link).replace(/ · .*$/, '') + ': ' + p.link);
@@ -297,7 +382,9 @@ window.NPPosts = (function () {
       h.push(`<h2>${esc(name)}</h2>`);
       for (const p of list) {
         const w = whenLine(p);
-        const lines = [`<strong>${esc(w ? w + ' — ' + p.title : p.title)}</strong>`];
+        if (p.cancelled) { h.push(`<p><strong>${esc((w ? w + ' — ' : '') + p.title + ': cancelled this time')}</strong></p>`); continue; }
+        if (p.nth > 0) { h.push(`<p><strong>${esc((w ? w + ' — ' : '') + p.title)}</strong>${p.location ? ' · ' + esc(p.location) : ''}</p>`); continue; }
+        const lines = [`<strong>${esc(w ? w + ' — ' + p.title : p.title)}</strong>${esc(seriesNote(p))}`];
         if (p.location) lines.push(esc(p.location));
         if (p.details) lines.push(para(p.details));
         if (p.link) lines.push(`<a href="${esc(p.link)}">${esc(linkLabel(p.link).replace(/ · .*$/, ''))}: ${esc(p.link)}</a>`);
@@ -356,5 +443,5 @@ Ward calendar: subscribe once at https://northpointysa.com/calendar.html and eve
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, occurrences, expand, repeatLabel, rrule, EMAIL_DEFAULTS };
 })();

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=7">
+  <link rel="stylesheet" href="app.css?v=8">
 </head>
 <body>
   <header class="hero compact">
@@ -41,7 +41,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="posts.js?v=7"></script>
+  <script src="posts.js?v=8"></script>
   <script>
     (function () {
       const { rpc, el, icons } = NP;
@@ -57,7 +57,7 @@
         const box = $('preview'); box.innerHTML = '';
         if (!v.title && !v.details) { box.appendChild(el('p', { class: 'empty' }, 'Start typing and the post shows up here.')); return; }
         const prev = form.el.querySelector('.flyer-preview');
-        box.appendChild(NPPosts.card({ title: v.title || 'Untitled', details: v.details, event_date: v.event_date, start_time: v.start_time, end_time: v.end_time, location: v.location, link: v.link, flyer_url: prev && !prev.hidden ? prev.src : '' }));
+        box.appendChild(NPPosts.card({ title: v.title || 'Untitled', details: v.details, event_date: v.event_date, start_time: v.start_time, end_time: v.end_time, location: v.location, link: v.link, flyer_url: prev && !prev.hidden ? prev.src : '', repeat: v.repeat, repeat_until: v.repeat_until, repeat_show: v.repeat_show, skip_dates: [] }));
       }
       form.el.addEventListener('input', paint);
       form.el.addEventListener('change', () => setTimeout(paint, 50));
@@ -69,9 +69,12 @@
         errEl.hidden = true;
         const bad = form.validate(); if (bad) return fail(bad);
         sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+        let v = form.values();
         try {
-          const v = await form.finalize();
-          const id = await rpc('submit_post', { p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_name: v.name, p_contact: v.contact, p_website: v.website });
+          v = await form.finalize();
+          // the repeat fields only go along when used, so a plain post still works before supabase/repeat.sql is run
+          const id = await rpc('submit_post', Object.assign({ p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_name: v.name, p_contact: v.contact, p_website: v.website },
+            v.repeat ? { p_repeat: v.repeat, p_repeat_until: v.repeat_until, p_repeat_show: v.repeat_show } : {}));
           $('main').hidden = true;
           const view = el('div', { class: 'success' }, [
             el('div', { class: 'check', html: icons.check }),
@@ -84,7 +87,7 @@
           try { localStorage.setItem('np_post_who', JSON.stringify({ name: v.name, contact: v.contact })); } catch (e) {}
         } catch (e) {
           sendBtn.disabled = false; sendBtn.textContent = 'Send for approval';
-          fail(/submit_post/.test(e.message) ? 'Posting is not switched on yet (the leaders need to run supabase/posts.sql).' : e.message);
+          fail(/submit_post/.test(e.message) ? (v.repeat ? 'Repeating posts are not switched on yet (the leaders need to run supabase/repeat.sql) — try it without the repeat for now.' : 'Posting is not switched on yet (the leaders need to run supabase/posts.sql).') : e.message);
         }
       });
       // remember who you are between posts
