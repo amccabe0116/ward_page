@@ -214,5 +214,73 @@ window.NPPosts = (function () {
     return { el: root, values, validate, finalize, focus: () => $f.title.focus(), fields: $f };
   }
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso };
+  // ---- the weekly email, built from the posts ----
+  // o: { header, footer, site } — header/footer are plain text (URLs get linked in the HTML version).
+  function emailSections(posts) {
+    const dated = posts.filter(p => p.event_date), undated = posts.filter(p => !p.event_date);
+    return [['Coming up', dated], ['Announcements', undated]].filter(([, l]) => l.length);
+  }
+  function whenLine(p) {
+    const dp = dateParts(p.event_date); if (!dp) return '';
+    return `${dp.dow}, ${dp.mon} ${dp.d}` + (timeRange(p) ? ' · ' + timeRange(p) : '');
+  }
+  function emailPlain(posts, o) {
+    o = o || {}; const site = o.site || 'https://northpointysa.com';
+    const out = [];
+    if (o.title) out.push(o.title, '');
+    if (o.header) out.push(o.header.trim(), '');
+    for (const [name, list] of emailSections(posts)) {
+      out.push(name.toUpperCase(), '');
+      for (const p of list) {
+        const w = whenLine(p);
+        out.push((w ? w + ' — ' : '') + p.title);
+        if (p.location) out.push('  ' + p.location);
+        if (p.details) out.push(...String(p.details).trim().split('\n').map(l => '  ' + l));
+        if (p.link) out.push('  ' + linkLabel(p.link).replace(/ · .*$/, '') + ': ' + p.link);
+        if (p.flyer_url) out.push('  Flyer: ' + p.flyer_url);
+        out.push('');
+      }
+    }
+    if (o.footer) out.push(o.footer.trim(), '');
+    out.push('Everything, always up to date: ' + site);
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  }
+  function emailHtml(posts, o) {
+    o = o || {}; const site = o.site || 'https://northpointysa.com';
+    const esc = s => NP.escapeHtml(String(s || ''));
+    const para = t => linkify(String(t || '').trim()).replace(/\n/g, '<br>');
+    const h = [];
+    h.push(`<div style="font-family:Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d2230;max-width:600px">`);
+    if (o.title) h.push(`<h1 style="font-family:Georgia,serif;font-size:24px;margin:0 0 12px;color:#1b2a41">${esc(o.title)}</h1>`);
+    if (o.header) h.push(`<div style="background:#f2ecdd;border-radius:10px;padding:12px 14px;margin:0 0 18px;font-size:14px">${para(o.header)}</div>`);
+    for (const [name, list] of emailSections(posts)) {
+      h.push(`<h2 style="font-family:Georgia,serif;font-size:19px;margin:22px 0 10px;color:#1b2a41;border-bottom:1px solid #e6e2d8;padding-bottom:6px">${esc(name)}</h2>`);
+      for (const p of list) {
+        const w = whenLine(p);
+        h.push(`<div style="margin:0 0 18px;padding:0 0 14px;border-bottom:1px solid #eee">`);
+        if (w) h.push(`<div style="font-size:13px;font-weight:700;color:#8a6d1f;text-transform:uppercase;letter-spacing:.03em">${esc(w)}</div>`);
+        h.push(`<div style="font-size:17px;font-weight:700;margin:2px 0 4px">${esc(p.title)}</div>`);
+        if (p.location) h.push(`<div style="color:#6b7280;font-size:14px">${esc(p.location)}</div>`);
+        if (p.details) h.push(`<div style="margin:6px 0 0">${para(p.details)}</div>`);
+        if (p.link) h.push(`<div style="margin:8px 0 0"><a href="${esc(p.link)}" style="color:#1b2a41;font-weight:700">${esc(linkLabel(p.link))} →</a></div>`);
+        if (p.flyer_url) h.push(`<div style="margin:10px 0 0"><a href="${esc(p.flyer_url)}"><img src="${esc(p.flyer_url)}" alt="${esc(p.title)} flyer" style="max-width:100%;width:360px;border-radius:10px;border:1px solid #e6e2d8"></a></div>`);
+        h.push(`</div>`);
+      }
+    }
+    if (o.footer) h.push(`<div style="margin:18px 0 0;padding:12px 14px;background:#f2ecdd;border-radius:10px;font-size:14px">${para(o.footer)}</div>`);
+    h.push(`<p style="color:#6b7280;font-size:13px;margin:16px 0 0">Everything, always up to date: <a href="${site}" style="color:#1b2a41">${site.replace(/^https?:\/\//, '')}</a></p>`);
+    h.push(`</div>`);
+    return h.join('\n');
+  }
+  const EMAIL_DEFAULTS = {
+    header: `Ward text list: text your name and “please add me” to 770-470-3577
+WhatsApp chat: https://chat.whatsapp.com/Iy62NkmeS5pKF2Wn05fbRr
+Facebook group: ${C.links && C.links.facebook || ''}
+Housing: Hannah Gertson, ward housing specialist — 678-780-1758, hannahgertson@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=housing)
+Jobs: Emerie Elkins, ward employment specialist — 937-657-8439, elkins_ea@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=jobs)
+Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^Facebook group: \n/m, ''),
+    footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
+  };
+
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, EMAIL_DEFAULTS };
 })();

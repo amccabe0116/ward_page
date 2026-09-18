@@ -108,8 +108,15 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    it as *pending* (rate-limited, honeypot field). Leaders › Announcements shows *Waiting for
    approval* with Approve / Edit / Reject, the live list with Edit / Take down / Delete, and a
    *New post* form that publishes straight away; the tab badge counts pending posts. The weekly
-   announcements email still arrives as before and shows under the posts in a collapsed block
-   (and is where leaders edit it). Everything is in `supabase/posts.sql` and `posts.js`.
+   posts are also the source of the weekly email now: *Email version* on that tab builds it from
+   the live posts — a fixed contact-us block on top (text list, WhatsApp, Facebook, the housing
+   and employment specialists, notes to leadership, meeting the Bishop; editable, saved as
+   settings `posts_email_header` / `posts_email_footer`), then *Coming up* and *Announcements*,
+   then an invitation to post at `post.html` — with *Copy formatted* (HTML with images) and
+   *Copy plain text* (for LCR's composer). The old email import keeps running, but the home page
+   only shows that block when there are no posts. Flyers from the September 2026 email were
+   copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in
+   `supabase/posts.sql` and `posts.js`.
 
 8. **Text list.** `syncTextList` in `scripts/announcements.gs` reads the New Member Form
    responses and adds only the people who ticked *agree* on the form's "Automated Messages –

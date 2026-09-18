@@ -88,9 +88,20 @@
       <section class="pane" id="pane-announcements">
         <div class="inline" style="justify-content:space-between">
           <span class="muted">Posts show on the home page in date order and drop off after their day (notices without a date stay 30 days). Anything sent in from the site waits here for approval.</span>
-          <button class="btn small" id="post-new">+ New post</button>
+          <span class="inline"><button class="btn small secondary" id="post-email">Email version</button><button class="btn small" id="post-new">+ New post</button></span>
         </div>
         <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
+        <div class="card" id="post-email-panel" style="margin-top:12px" hidden>
+          <div class="inline" style="justify-content:space-between"><h3 style="margin:0">The weekly email, from the posts</h3><button class="chip" id="pe-close">Close</button></div>
+          <p class="muted">Everything that is live on the home page right now, in date order. Copy it into the LCR message (or Gmail) — <b>Copy formatted</b> keeps the headings and images, <b>Copy plain text</b> is the safe choice for LCR.</p>
+          <div class="field"><label for="pe-title">Subject / title</label><input id="pe-title" type="text"></div>
+          <div class="field"><label for="pe-header">Top of the email <span class="opt">(the contact-us block — same every week)</span></label><textarea id="pe-header" rows="6"></textarea></div>
+          <div class="field"><label for="pe-footer">Bottom of the email</label><textarea id="pe-footer" rows="2"></textarea></div>
+          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
+          <h4 class="pe-title">Preview</h4>
+          <div id="pe-preview" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff"></div>
+          <details style="margin-top:12px"><summary class="muted">Plain-text version</summary><textarea id="pe-plain" rows="18" readonly style="width:100%;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px"></textarea></details>
+        </div>
         <div id="post-queue" style="margin-top:12px"><p class="muted">Loading…</p></div>
         <details style="margin-top:24px" id="ann-email-details">
           <summary class="muted">This week's announcements email — the text shown under the posts on the home page</summary>
@@ -251,7 +262,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=1"></script>
+  <script src="posts.js?v=2"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -577,6 +588,53 @@
         postForm.focus();
       }
       $('post-new').addEventListener('click', () => openPostEditor(null));
+
+      // ---- the weekly email built from the live posts ----
+      let emailSettings = null;
+      async function openEmailPanel() {
+        const panel = $('post-email-panel'); panel.hidden = false; $('pe-msg').textContent = 'Building…';
+        try {
+          if (!emailSettings) {
+            const rows = await rpc('admin_get_settings', { p_pass: pass }); const st = Object.fromEntries(rows.map(r => [r.key, r.value]));
+            emailSettings = { header: st.posts_email_header || NPPosts.EMAIL_DEFAULTS.header, footer: st.posts_email_footer || NPPosts.EMAIL_DEFAULTS.footer };
+            $('pe-header').value = emailSettings.header; $('pe-footer').value = emailSettings.footer;
+          }
+          if (!$('pe-title').value) $('pe-title').value = 'North Point YSA — Weekly Announcements · ' + new Date().toLocaleDateString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric' });
+          await paintEmail(); $('pe-msg').textContent = '';
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e) { $('pe-msg').textContent = /posts_public/.test(e.message) ? 'Run supabase/posts.sql first.' : 'Could not build it: ' + e.message; }
+      }
+      let livePosts = [];
+      async function paintEmail() {
+        livePosts = await rpc('posts_public') || [];
+        const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value };
+        $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o);
+        $('pe-plain').value = NPPosts.emailPlain(livePosts, o);
+        if (!livePosts.length) $('pe-msg').textContent = 'No live posts yet — approve or add some first.';
+      }
+      ['pe-title', 'pe-header', 'pe-footer'].forEach(id => $(id).addEventListener('input', () => { const o = { title: $('pe-title').value.trim(), header: $('pe-header').value, footer: $('pe-footer').value }; $('pe-preview').innerHTML = NPPosts.emailHtml(livePosts, o); $('pe-plain').value = NPPosts.emailPlain(livePosts, o); }));
+      $('post-email').addEventListener('click', openEmailPanel);
+      $('pe-close').addEventListener('click', () => { $('post-email-panel').hidden = true; });
+      $('pe-save').addEventListener('click', async () => {
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'posts_email_header', p_value: $('pe-header').value });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'posts_email_footer', p_value: $('pe-footer').value });
+          emailSettings = { header: $('pe-header').value, footer: $('pe-footer').value }; $('pe-msg').textContent = 'Wording saved.';
+        } catch (e) { $('pe-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      async function copyEmail(rich) {
+        const html = $('pe-preview').innerHTML, text = $('pe-plain').value;
+        try {
+          if (rich && navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+          } else if (rich) {
+            const r = document.createRange(); r.selectNodeContents($('pe-preview')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); document.execCommand('copy'); sel.removeAllRanges();
+          } else { await navigator.clipboard.writeText(text); }
+          $('pe-msg').textContent = rich ? 'Copied with formatting — paste into the email body.' : 'Plain text copied.';
+        } catch (e) { $('pe-msg').textContent = 'Copy failed (' + e.message + ') — select the text below and copy it by hand.'; }
+      }
+      $('pe-copy-html').addEventListener('click', () => copyEmail(true));
+      $('pe-copy-text').addEventListener('click', () => copyEmail(false));
 
       // ---- settings ----
       async function loadSettings() {

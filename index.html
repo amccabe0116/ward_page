@@ -85,7 +85,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="posts.js?v=1"></script>
+  <script src="posts.js?v=2"></script>
   <script>
     (function () {
       const { el, fmtDate, linkify, escapeHtml, icons } = NP;
@@ -139,9 +139,12 @@
       // Posts: events and notices, soonest first (supabase/posts.sql). Until that SQL is run the
       // weekly email below is all there is, so it opens by default.
       const postsBox = document.getElementById('posts'), emailBlock = document.getElementById('email-block');
+      // The email is now written FROM the posts, so it only shows here when there are no posts.
+      let havePosts = false;
       NP.rpc('posts_public').then(rows => {
         NPPosts.renderPublic(postsBox, rows || []);
-        if (!(rows || []).length) emailBlock.open = true;
+        havePosts = (rows || []).length > 0;
+        if (havePosts) emailBlock.hidden = true; else emailBlock.open = true;
       }).catch(() => { postsBox.innerHTML = ''; postsBox.hidden = true; emailBlock.open = true; });
 
       const box = document.getElementById('announcements');
@@ -153,7 +156,7 @@
         .then(a => {
           box.innerHTML = '';
           if (!a || (!a.text && !(a.images && a.images.length))) return;
-          emailBlock.hidden = false;
+          if (!havePosts) emailBlock.hidden = false;
           if (a.sent_at) {
             const d = new Date(a.sent_at);
             meta.textContent = 'Posted ' + d.toLocaleDateString('en-US', { timeZone: NP.C.timeZone, month: 'short', day: 'numeric' });
