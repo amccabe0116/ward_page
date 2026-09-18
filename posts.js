@@ -274,11 +274,11 @@ window.NPPosts = (function () {
   }
   const EMAIL_DEFAULTS = {
     header: `Ward text list: text your name and “please add me” to 770-470-3577
-WhatsApp chat: https://chat.whatsapp.com/Iy62NkmeS5pKF2Wn05fbRr
+WhatsApp chat: ${C.links && C.links.whatsapp || ''}
 Facebook group: ${C.links && C.links.facebook || ''}
 Housing: Hannah Gertson, ward housing specialist — 678-780-1758, hannahgertson@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=housing)
 Jobs: Emerie Elkins, ward employment specialist — 937-657-8439, elkins_ea@yahoo.com (or leave a private note: https://northpointysa.com/contact.html?topic=jobs)
-Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^Facebook group: \n/m, ''),
+Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^(WhatsApp chat|Facebook group): \n/gm, ''),
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
