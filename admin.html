@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=4">
+  <link rel="stylesheet" href="app.css?v=5">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -39,7 +39,7 @@
         <button class="tab on" data-pane="overview">Overview</button>
         <button class="tab" data-pane="attendance">Attendance</button>
         <button class="tab" data-pane="notes">Inbox<span class="badge" id="notes-badge" hidden></span></button>
-        <button class="tab" data-pane="announcements">Announcements</button>
+        <button class="tab" data-pane="announcements">Announcements<span class="badge" id="posts-badge" hidden></span></button>
         <button class="tab" data-pane="callings">Callings</button>
         <button class="tab" data-pane="members">Members</button>
         <button class="tab" data-pane="sync">LCR</button>
@@ -84,18 +84,27 @@
         <div id="notes" style="margin-top:4px"></div>
       </section>
 
-      <!-- Announcements editor -->
+      <!-- Announcements: posts (approve / edit / add) + the weekly email text -->
       <section class="pane" id="pane-announcements">
-        <div class="card ann-editor">
-          <div class="inline" style="justify-content:space-between">
-            <h3 style="margin:0">This week's announcements</h3>
-            <span class="muted" id="ann-meta"></span>
-          </div>
-          <p class="muted">Edits go live on the home page within a minute. Every Sunday night the new email replaces this automatically.</p>
-          <div class="field"><label for="ann-text">Text</label><textarea id="ann-text"></textarea></div>
-          <div class="field"><label>Flyers &amp; files</label><div class="ann-files" id="ann-files"></div></div>
-          <div class="inline"><button class="btn small" id="ann-save">Save</button><button class="btn small secondary" id="ann-load-json">Start from what's on the site now</button><span class="muted" id="ann-msg"></span></div>
+        <div class="inline" style="justify-content:space-between">
+          <span class="muted">Posts show on the home page in date order and drop off after their day (notices without a date stay 30 days). Anything sent in from the site waits here for approval.</span>
+          <button class="btn small" id="post-new">+ New post</button>
         </div>
+        <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
+        <div id="post-queue" style="margin-top:12px"><p class="muted">Loading…</p></div>
+        <details style="margin-top:24px" id="ann-email-details">
+          <summary class="muted">This week's announcements email — the text shown under the posts on the home page</summary>
+          <div class="card ann-editor" style="margin-top:10px">
+            <div class="inline" style="justify-content:space-between">
+              <h3 style="margin:0">This week's announcements</h3>
+              <span class="muted" id="ann-meta"></span>
+            </div>
+            <p class="muted">Edits go live on the home page within a minute. Every Sunday night the new email replaces this automatically.</p>
+            <div class="field"><label for="ann-text">Text</label><textarea id="ann-text"></textarea></div>
+            <div class="field"><label>Flyers &amp; files</label><div class="ann-files" id="ann-files"></div></div>
+            <div class="inline"><button class="btn small" id="ann-save">Save</button><button class="btn small secondary" id="ann-load-json">Start from what's on the site now</button><span class="muted" id="ann-msg"></span></div>
+          </div>
+        </details>
       </section>
 
       <!-- Callings: members-without-callings meeting tool (callings.js) -->
@@ -242,6 +251,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
+  <script src="posts.js?v=1"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -403,6 +413,7 @@
       let meetings = [];
       async function loadNotesCount() {
         try { const n = await rpc('admin_notes_count', { p_pass: pass }); $('notes-badge').textContent = n; $('notes-badge').hidden = !n; } catch (e) {}
+        try { const n = await rpc('admin_posts_pending_count', { p_pass: pass }); $('posts-badge').textContent = n; $('posts-badge').hidden = !n; } catch (e) {}
       }
       async function loadNotes() {
         const box = $('notes'); box.innerHTML = '';
@@ -494,7 +505,78 @@
           $('ann-msg').textContent = 'Saved — live on the home page now.'; await loadAnnouncements(); $('ann-msg').textContent = 'Saved — live on the home page now.';
         } catch (e) { $('ann-msg').textContent = 'Not saved: ' + e.message; }
       });
-      document.querySelector('.tab[data-pane=announcements]').addEventListener('click', loadAnnouncements);
+      document.querySelector('.tab[data-pane=announcements]').addEventListener('click', () => { loadPosts(); loadAnnouncements(); });
+
+      // ---- posts: the review queue + add / edit (posts.js, supabase/posts.sql) ----
+      let posts = [], postForm = null;
+      const whenShort = iso => new Date(iso).toLocaleString('en-US', { timeZone: C.timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      async function loadPosts() {
+        const box = $('post-queue');
+        try { posts = await rpc('admin_posts', { p_pass: pass }); }
+        catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_posts/.test(e.message) ? 'Run supabase/posts.sql in Supabase to turn on posts.' : 'Could not load posts: ' + e.message)); return; }
+        renderPosts();
+      }
+      function renderPosts() {
+        const box = $('post-queue'); box.innerHTML = '';
+        const today = NPPosts.todayIso();
+        const pending = posts.filter(p => p.status === 'pending');
+        const live = posts.filter(p => p.status === 'approved' && (!p.event_date || p.event_date >= today));
+        const past = posts.filter(p => p.status === 'approved' && p.event_date && p.event_date < today);
+        const rejected = posts.filter(p => p.status === 'rejected');
+        $('posts-badge').textContent = pending.length; $('posts-badge').hidden = !pending.length;
+        const section = (title, list, cls, empty) => {
+          box.appendChild(el('h3', { class: 'post-queue-title' }, [title, el('span', { class: 'pill ' + (cls || 'off') }, String(list.length))]));
+          if (!list.length) { box.appendChild(el('p', { class: 'muted' }, empty)); return; }
+          box.appendChild(el('div', { class: 'post-review' }, list.map(postCard)));
+        };
+        section('Waiting for approval', pending, 'wait', 'Nothing waiting.');
+        section('On the home page', live, 'ok', 'Nothing live — add a post or approve one.');
+        if (past.length) section('Past events', past, 'off', '');
+        if (rejected.length) section('Not approved', rejected, 'off', '');
+      }
+      function postCard(p) {
+        const who = p.source === 'public' ? 'Sent in by ' + (p.submitted_name || 'someone') + (p.submitted_contact ? ' · ' + p.submitted_contact : '') : 'Posted by leaders';
+        const meta = who + ' · ' + whenShort(p.created_at) + (p.reviewed_at && p.status !== 'pending' ? ' · ' + p.status + ' ' + whenShort(p.reviewed_at) : '');
+        const b = (label, cls, fn) => el('button', { class: 'chip ' + (cls || ''), type: 'button', onclick: fn }, label);
+        const actions = [
+          p.status !== 'approved' ? b(p.status === 'pending' ? 'Approve' : 'Publish', 'ok', () => setPostStatus(p, 'approved')) : null,
+          b('Edit', '', () => openPostEditor(p)),
+          p.status === 'approved' ? b('Take down', '', () => setPostStatus(p, 'rejected')) : null,
+          p.status === 'pending' ? b('Reject', 'danger', () => setPostStatus(p, 'rejected')) : null,
+          p.status !== 'pending' ? b('Delete', 'danger', () => deletePost(p)) : null,
+        ];
+        const c = NPPosts.card(p, { footer: el('div', {}, [el('div', { class: 'post-meta' }, meta), el('div', { class: 'post-actions' }, actions)]) });
+        c.classList.add(p.status);
+        return c;
+      }
+      async function setPostStatus(p, status) {
+        try { await rpc('admin_post_status', { p_pass: pass, p_id: p.id, p_status: status, p_by: null }); toast(status === 'approved' ? '“' + p.title + '” is on the home page' : status === 'rejected' ? '“' + p.title + '” taken down' : 'Updated'); await loadPosts(); }
+        catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      async function deletePost(p) {
+        if (!confirm('Delete “' + p.title + '” for good?')) return;
+        try { await rpc('admin_post_delete', { p_pass: pass, p_id: p.id }); toast('Deleted'); await loadPosts(); } catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      function openPostEditor(p) {
+        const box = $('post-editor'); box.innerHTML = ''; box.hidden = false;
+        postForm = NPPosts.form(p || {}, { submitLabel: p ? 'Save' : 'Publish' });
+        const msg = el('span', { class: 'muted' });
+        const save = el('button', { class: 'btn small', type: 'button', onclick: async () => {
+          const bad = postForm.validate(); if (bad) { msg.textContent = bad; return; }
+          save.disabled = true; msg.textContent = 'Saving…';
+          try {
+            const v = await postForm.finalize();
+            const id = await rpc('admin_post_save', { p_pass: pass, p_id: p ? p.id : null, p_title: v.title, p_details: v.details, p_event_date: v.event_date, p_start_time: v.start_time, p_end_time: v.end_time, p_location: v.location, p_link: v.link, p_flyer_url: v.flyer_url, p_by: null });
+            toast(p ? 'Saved' : '“' + v.title + '” is on the home page'); box.hidden = true; box.innerHTML = ''; await loadPosts();
+          } catch (e) { msg.textContent = 'Not saved: ' + (/admin_post_save/.test(e.message) ? 'run supabase/posts.sql first' : e.message); save.disabled = false; }
+        } }, p ? 'Save changes' : 'Publish now');
+        box.appendChild(el('h3', { style: 'margin:0 0 10px' }, p ? 'Edit post' : 'New post'));
+        box.appendChild(postForm.el);
+        box.appendChild(el('div', { class: 'inline' }, [save, el('button', { class: 'btn small secondary', type: 'button', onclick: () => { box.hidden = true; box.innerHTML = ''; } }, 'Cancel'), msg]));
+        box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        postForm.focus();
+      }
+      $('post-new').addEventListener('click', () => openPostEditor(null));
 
       // ---- settings ----
       async function loadSettings() {

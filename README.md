@@ -3,7 +3,9 @@
 Sunday roll + weekly announcements for the North Point YSA Ward.
 
 ```
-index.html          landing: two class buttons + this week's announcements
+index.html          landing: two class buttons + What's happening (posts in date order) + the weekly email
+post.html           share an announcement: anyone can submit a post (with a flyer) for leaders to approve
+posts.js            posts shared code: the card, the home-page list, the add/edit form, flyer resize + upload
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
@@ -30,6 +32,8 @@ supabase/sheets.sql               mirrors the two leadership Google Sheets (call
 supabase/edits.sql                site-side edits to the callings sheet, written back by the Apps Script
 supabase/flags.sql                Flag column (Warning/Magnet), row deletion, message templates
 supabase/keys.sql                 high-score board for the mini game (keys_submit / keys_top / admin_keys_delete)
+supabase/addrow.sql               Add to sheet: lets the site pre-fill the callings sheet's intake columns
+supabase/posts.sql                posts (events / notices with flyers), public submission, approval, the "flyers" storage bucket
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -95,7 +99,19 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    Removed / left off filter undoes it. For people with no sheet row the site's own edits are
    always shown (there is no sheet copy to defer to).
 
-7. **Text list.** `syncTextList` in `scripts/announcements.gs` reads the New Member Form
+7. **Announcements as posts.** The home page's *What's happening* section lists posts — each
+   an event (date, time, place, details, link, flyer) or an undated notice — soonest first, grouped
+   by month, dropping off after the day passes (notices stay 30 days). *Share something* opens
+   `post.html`, where anyone can write a post and attach a flyer; the image is shrunk in the
+   browser (longest side 1600 px, JPEG) and uploaded to the public Supabase storage bucket
+   `flyers` (3 MB cap, images only, upload-only for the public key), then `submit_post` stores
+   it as *pending* (rate-limited, honeypot field). Leaders › Announcements shows *Waiting for
+   approval* with Approve / Edit / Reject, the live list with Edit / Take down / Delete, and a
+   *New post* form that publishes straight away; the tab badge counts pending posts. The weekly
+   announcements email still arrives as before and shows under the posts in a collapsed block
+   (and is where leaders edit it). Everything is in `supabase/posts.sql` and `posts.js`.
+
+8. **Text list.** `syncTextList` in `scripts/announcements.gs` reads the New Member Form
    responses and adds only the people who ticked *agree* on the form's "Automated Messages –
    Terms and conditions" question (and gave a phone number) to the SimpleTexting list
    (`SIMPLETEXTING_LIST`, default "North Point Ward - Notifications"); the form timestamp is kept

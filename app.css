@@ -442,3 +442,60 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .ov-card .muted.small { margin: 10px 0 0; }
 .ov-table td, .ov-table th { padding: 8px 10px; }
 @media (max-width: 720px) { .ov-grid { grid-template-columns: 1fr; } }
+
+/* ---- Announcements as posts (posts.js) ---- */
+.chip.add-post { text-decoration: none; font-weight: 600; background: var(--navy); color: #fff; border-color: var(--navy); white-space: nowrap; }
+.post-list { display: grid; gap: 14px; }
+.post-month { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin: 18px 0 2px; }
+.post-month:first-child { margin-top: 0; }
+.post {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
+}
+.post-flyer { display: block; background: #f2efe8; line-height: 0; }
+.post-flyer img { width: 100%; max-height: 440px; object-fit: contain; display: block; }
+.post-body { padding: 16px 18px 18px; display: grid; gap: 6px; }
+.post-when { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--navy); background: #f2ecdd; border-radius: 999px; padding: 4px 10px 4px 8px; width: fit-content; }
+.post-when.soon { background: var(--gold-2); color: #3d3416; }
+.post-when .ic, .post-where .ic, .post-link .ic { width: 16px; height: 16px; display: inline-grid; place-items: center; flex: none; }
+.post-when .ic svg, .post-where .ic svg, .post-link .ic svg { width: 16px; height: 16px; }
+.post-title { font-family: var(--serif); font-size: 21px; line-height: 1.2; margin: 4px 0 0; font-weight: 600; }
+.post-where { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+.post-details { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15.5px; line-height: 1.5; margin-top: 4px; }
+.post-details a { overflow-wrap: anywhere; }
+.post-details.folded { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.post-more { align-self: start; background: none; border: 0; color: var(--navy); font-weight: 600; font-size: 14px; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.post-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 14px; border-radius: 10px; background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; width: fit-content; }
+.email-block { margin-top: 18px; }
+.email-block summary { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; cursor: pointer; list-style: none; padding: 12px 4px; color: var(--navy); font-weight: 600; }
+.email-block summary::-webkit-details-marker { display: none; }
+.email-block summary::before { content: '›'; display: inline-block; margin-right: 8px; transition: transform .15s; color: var(--muted); }
+.email-block[open] summary::before { transform: rotate(90deg); }
+.email-block summary > span:first-child::before { content: none; }
+.email-block .card { margin-top: 4px; }
+#announcements.collapsed { max-height: 560px; overflow: hidden; position: relative; }
+
+/* the add / edit form */
+.post-form .inline.wrap2 > .field { flex: 1 1 150px; margin: 0; }
+.btn[hidden], .chip[hidden], .post-form [hidden] { display: none !important; }
+.post-form .inline { align-items: flex-start; margin-bottom: 14px; }
+.flyer-box { display: flex; gap: 14px; align-items: flex-start; border: 1px dashed var(--line); border-radius: 12px; padding: 12px; background: var(--paper); }
+.flyer-preview { width: 96px; max-height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.flyer-preview[hidden] { display: none; }
+.flyer-controls { display: grid; gap: 6px; }
+.flyer-controls .btn .ic { width: 16px; height: 16px; display: inline-grid; }
+.flyer-controls .btn .ic svg { width: 16px; height: 16px; }
+.preview-wrap .section-title { margin-top: 8px; }
+.preview-wrap .post { pointer-events: none; }
+
+/* Leaders › Announcements: the review queue */
+.post-review { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; }
+.post-review .post { box-shadow: none; }
+.post-review .post-flyer img { max-height: 300px; }
+.post-review .post.pending { border-color: var(--gold); }
+.post-review .post.rejected { opacity: .6; }
+.post-meta { color: var(--muted); font-size: 13px; }
+.post-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.post-actions .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: #cfe9d8; }
+.post-queue-title { font-family: var(--serif); font-size: 18px; margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; }
+.post-queue-title .pill { font-size: 12px; }

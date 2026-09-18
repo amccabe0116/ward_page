@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>North Point YSA</title>
-  <meta name="description" content="North Point YSA Ward — Sunday roll and weekly announcements.">
+  <meta name="description" content="North Point YSA Ward — Sunday roll, what’s happening this month, and how to connect.">
   <meta name="theme-color" content="#1b2a41">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=4">
+  <link rel="stylesheet" href="app.css?v=5">
 </head>
 <body>
   <header class="hero">
@@ -68,21 +68,24 @@
       </div>
     </section>
 
-    <section aria-labelledby="ann-title">
+    <section aria-labelledby="ann-title" id="happening">
       <div class="section-title">
-        <h2 id="ann-title">Announcements</h2>
-        <span class="meta" id="ann-meta"></span>
+        <h2 id="ann-title">What’s happening</h2>
+        <a class="chip add-post" href="post.html" id="add-post">+ Share something</a>
       </div>
-      <div class="card" id="announcements">
-        <p class="empty">Loading…</p>
-      </div>
+      <div id="posts"><p class="empty">Loading…</p></div>
+      <details class="email-block" id="email-block" hidden>
+        <summary><span>This week’s announcements email</span><span class="meta" id="ann-meta"></span></summary>
+        <div class="card" id="announcements"></div>
+      </details>
     </section>
 
     <p class="footer footer-row"><a href="keys.html">The keys</a><span>North Point YSA Ward · Roswell Georgia Stake</span><a href="admin.html">Leaders</a></p>
   </main>
 
   <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
+  <script src="posts.js?v=1"></script>
   <script>
     (function () {
       const { el, fmtDate, linkify, escapeHtml, icons } = NP;
@@ -133,18 +136,24 @@
       NP.loadWindows().then(() => NP.everyTick(paintChoices));
       paintChoices();
 
+      // Posts: events and notices, soonest first (supabase/posts.sql). Until that SQL is run the
+      // weekly email below is all there is, so it opens by default.
+      const postsBox = document.getElementById('posts'), emailBlock = document.getElementById('email-block');
+      NP.rpc('posts_public').then(rows => {
+        NPPosts.renderPublic(postsBox, rows || []);
+        if (!(rows || []).length) emailBlock.open = true;
+      }).catch(() => { postsBox.innerHTML = ''; postsBox.hidden = true; emailBlock.open = true; });
+
       const box = document.getElementById('announcements');
       const meta = document.getElementById('ann-meta');
-      // Announcements: the database copy (editable by leaders) wins; the repo's JSON is the fallback.
+      // The weekly email: the database copy (editable by leaders) wins; the repo's JSON is the fallback.
       const fromDb = NP.rpc('current_announcements').then(rows => { const a = rows && rows[0]; if (!a || (!a.text && !(a.images || []).length)) throw new Error('empty'); return a; });
       const fromJson = () => fetch('announcements.json?v=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(new Error(r.status)));
       fromDb.catch(fromJson)
         .then(a => {
           box.innerHTML = '';
-          if (!a || (!a.text && !(a.images && a.images.length))) {
-            box.appendChild(el('p', { class: 'empty' }, 'No announcements posted yet.'));
-            return;
-          }
+          if (!a || (!a.text && !(a.images && a.images.length))) return;
+          emailBlock.hidden = false;
           if (a.sent_at) {
             const d = new Date(a.sent_at);
             meta.textContent = 'Posted ' + d.toLocaleDateString('en-US', { timeZone: NP.C.timeZone, month: 'short', day: 'numeric' });
@@ -152,7 +161,7 @@
           if (a.text) box.appendChild(el('div', { class: 'announcement-body', html: linkify(a.text) }));
           // long announcements start collapsed
           requestAnimationFrame(() => {
-            if (box.scrollHeight > 720) {
+            if (emailBlock.open && box.scrollHeight > 720) {
               box.classList.add('collapsed');
               const more = el('button', { class: 'btn secondary more', onclick: () => { box.classList.remove('collapsed'); more.remove(); } }, 'Show all announcements');
               box.after(more);
@@ -173,7 +182,7 @@
             box.appendChild(f);
           }
         })
-        .catch(() => { box.innerHTML = ''; box.appendChild(el('p', { class: 'empty' }, 'No announcements posted yet.')); });
+        .catch(() => { box.innerHTML = ''; });
     })();
   </script>
 </body>
