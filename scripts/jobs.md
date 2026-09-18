@@ -70,6 +70,14 @@ Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
    (Sending slices with deactivateMissing:true would deactivate everyone not in that slice.)
 ```
 
+Notes from the 2026-09-17 run: LCR rendered the custom report's column headers as untranslated
+keys ("record.preferred.name"); lcr-report.js now maps those back to the labels the site expects.
+The attendance report listed 243 members vs 273 on the site — all 30 were on LCR's Members Moved
+Out report (mostly processed that day), so deactivateMissing:true was right; check that report
+(https://lcr.churchofjesuschrist.org/mlt/report/members-moved-out?lang=eng) before deactivating
+a large batch. The Members Moved In page needs ~15 s to render its table; after switching
+"Show for past" to 3 Months wait for the row count to change.
+
 First real run (2026-09-14, from Joseph's Mac): Sept 6 → 116 of 119 check-ins into LCR, Sept 13 →
 105 of 105; 112 + 104 clicks took about 2 minutes each. Three Sept 6 rows stay "pending" forever
 because those two records moved out of the ward before the sync (Makayla Blair, Trey Gaul). The
