@@ -469,6 +469,7 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .post-skips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .remind-box { display: grid; gap: 8px; margin: 10px 0 4px; padding: 12px; border: 1px solid var(--gold); border-radius: 12px; background: #fbf7ec; }
 .remind-box textarea { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; resize: vertical; }
+.remind-box input[type=tel] { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; }
 .post-skips .chip.skipped { text-decoration: line-through; color: var(--muted); }
 .post-when .ic, .post-where .ic, .post-link .ic { width: 16px; height: 16px; display: inline-grid; place-items: center; flex: none; }
 .post-when .ic svg, .post-where .ic svg, .post-link .ic svg { width: 16px; height: 16px; }

@@ -143,7 +143,8 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    Notifications") through the Apps Script (web app action `remind`): the wording is shown first
    — title, day, time, place and the post's short link `e.html?id=…` (the flyer and details on
    their own page) — with the list's live contact count, and nothing goes out until *Send to N
-   people* plus the confirm. The script stamps `reminded_at` (`admin_post_reminded`, in
+   people* plus the confirm. *Text a test to <your mobile>* sends the same wording to one phone
+   first (the single-number path, web app action `notify`; the number is remembered on that device). The script stamps `reminded_at` (`admin_post_reminded`, in
    `supabase/repeat.sql`) so the card says when it was texted.
    The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were

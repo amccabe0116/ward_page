@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=9">
+  <link rel="stylesheet" href="app.css?v=10">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -639,11 +639,25 @@
         const send = el('button', { class: 'btn small', type: 'button', disabled: '' }, 'Send');
         const paintCount = () => { const n = [...ta.value].length, seg = smsSegments(ta.value); count.textContent = n + ' characters · ' + seg + ' text' + (seg === 1 ? '' : 's') + (/[^\x00-\x7f]/.test(ta.value) ? ' (special characters shorten texts — plain quotes and dashes fit more)' : ''); };
         ta.addEventListener('input', paintCount); paintCount();
+        // a test to one phone first (the single-number path the Warning / Magnet texts use), remembered per device
+        const testPhone = el('input', { type: 'tel', placeholder: 'your mobile', inputmode: 'tel', style: 'width:150px', value: (() => { try { return localStorage.getItem('np_test_phone') || ''; } catch (e) { return ''; } })() });
+        const testBtn = el('button', { class: 'chip', type: 'button', onclick: async () => {
+          const digits = testPhone.value.replace(/\D/g, ''); if (digits.length < 10) { msg.textContent = 'Enter a 10-digit mobile number for the test.'; return; }
+          testBtn.disabled = true; msg.textContent = 'Sending the test…';
+          try {
+            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: 'Test', phone: digits, email: '', flag: 'test', sms: '[TEST] ' + ta.value.trim() }) }).then(x => x.json());
+            if (!r.ok || r.sms !== 'sent') throw new Error(r.error || ('text ' + r.sms));
+            try { localStorage.setItem('np_test_phone', digits); } catch (e) {}
+            msg.textContent = 'Test sent to ' + digits.replace(/(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') + ' — nothing went to the list.';
+          } catch (e) { msg.textContent = 'Test not sent: ' + e.message; }
+          testBtn.disabled = false;
+        } }, 'Text a test to');
         const box = el('div', { class: 'remind-box' }, [
           el('b', {}, 'Text a reminder'),
           listMsg,
           p.reminded_at ? el('p', { class: 'muted small', style: 'margin:0' }, 'A reminder for this already went out ' + whenShort(p.reminded_at) + '.') : null,
           ta, count,
+          el('div', { class: 'inline' }, [testBtn, testPhone, el('span', { class: 'muted small' }, 'first, if you like')]),
           el('div', { class: 'inline' }, [send, el('button', { class: 'chip', type: 'button', onclick: () => box.remove() }, 'Cancel'), msg]),
         ]);
         cardEl.querySelector('.post-actions').before(box);
