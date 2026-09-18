@@ -516,7 +516,7 @@ window.NPCallings = (function () {
     const preview = [phone ? `TEXT to ${L['Individual Phone']}:\n${sms}` : null, email ? `EMAIL to ${email}:\n${subject}\n\n${body}` : null].filter(Boolean).join('\n\n—————\n\n');
     if (!(await ask(`Send this to ${p.name}?\n\n${preview}`))) return;
     try {
-      const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass: ctx.getPass(), name: p.name, phone, email, flag: p.flag, sms, subject, body, fromName: t.notify_from_name || '', replyTo: t.notify_reply_to || '' }) });
+      const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass: ctx.getPass(), name: p.name, phone, email, flag: p.flag, sms, subject, body, fromName: t.notify_from_name || '', fromEmail: t.notify_from_email || '', replyTo: t.notify_reply_to || '' }) });
       const j = await r.json();
       const sentSms = j.sms === 'sent', sentEmail = j.email === 'sent';
       if (!sentSms && !sentEmail) throw new Error(j.error || 'send failed');  // one channel is enough to count as sent
@@ -528,8 +528,8 @@ window.NPCallings = (function () {
       const keep = p.sheetName; build(); applyFilter(); const at = view.findIndex(x => x.sheetName === keep); if (at >= 0) deckAt = at; renderList(); renderDeck();
       saveToSheet(p, null, true);
       const what = sentSms && sentEmail ? 'Text and email sent' : sentSms ? 'Text sent' : 'Email sent';
-      const miss = !sentSms && phone ? ` · text not sent (${j.error || 'no SimpleTexting key yet'})` : !sentEmail && email ? ` · email not sent (${j.error || 'unknown'})` : '';
-      toast(`${what} to ${p.name}${miss}`, miss ? 7000 : 3500);
+      const miss = (!sentSms && phone ? ` · text not sent (${j.error || 'no SimpleTexting key yet'})` : !sentEmail && email ? ` · email not sent (${j.error || 'unknown'})` : '') + (sentEmail && j.note ? ` · ${j.note}` : '');
+      toast(`${what} to ${p.name}${miss}`, miss ? 8000 : 3500);
     } catch (e) { toast('Not sent: ' + e.message, 5000); }
   }
 

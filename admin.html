@@ -182,10 +182,11 @@
 
         <div class="card" style="margin-top:16px">
           <h3 style="margin-top:0">Warning / Magnet messages</h3>
-          <p class="muted">What <em>Send the warning / magnet message</em> on a person's slide sends. <code>{first}</code> = first name, <code>{name}</code> = full name. Texts go out through the ward's SimpleTexting number and emails from the Google account running the script (set up in <code>scripts/announcements.gs</code>). Please read these through as a bishopric before the first send.</p>
+          <p class="muted">What <em>Send the warning / magnet message</em> on a person's slide sends. <code>{first}</code> = first name, <code>{name}</code> = full name. Texts go out through the ward's SimpleTexting number; emails go through the Google account running the script (set up in <code>scripts/announcements.gs</code>) and can show a different <em>from</em> address once that address is added under Gmail → Settings → Accounts and Import → “Send mail as” in that account. Please read these through as a bishopric before the first send.</p>
           <div class="inline">
             <div class="field" style="margin:0;flex:1"><label for="n-from">Email sender name</label><input id="n-from" type="text" placeholder="North Point YSA Ward"></div>
-            <div class="field" style="margin:0;flex:1"><label for="n-reply">Reply-to email <span class="opt">(optional)</span></label><input id="n-reply" type="email" placeholder="bishop@…"></div>
+            <div class="field" style="margin:0;flex:1"><label for="n-from-email">From email <span class="opt">(a “Send mail as” address)</span></label><input id="n-from-email" type="email" placeholder="npysawardclerk@gmail.com"></div>
+            <div class="field" style="margin:0;flex:1"><label for="n-reply">Reply-to email <span class="opt">(optional)</span></label><input id="n-reply" type="email" placeholder="npysawardclerk@gmail.com"></div>
           </div>
           <div class="inline" style="margin-top:6px">
             <div class="field" style="margin:0"><label for="n-due-warning">Move records this many days after a Warning</label><input id="n-due-warning" type="number" min="1" max="365" placeholder="21" style="max-width:110px"></div>
@@ -239,7 +240,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=17"></script>
+  <script src="callings.js?v=18"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -508,7 +509,7 @@
         for (const [id, key] of TPL) $(id).value = get(key) || '';
         $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
-      const TPL = [['n-from', 'notify_from_name'], ['n-reply', 'notify_reply_to'], ['n-due-warning', 'flag_due_days_warning'], ['n-due-magnet', 'flag_due_days_magnet'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
+      const TPL = [['n-from', 'notify_from_name'], ['n-from-email', 'notify_from_email'], ['n-reply', 'notify_reply_to'], ['n-due-warning', 'flag_due_days_warning'], ['n-due-magnet', 'flag_due_days_magnet'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
       $('t-send').addEventListener('click', async () => {
         const phone = $('t-phone').value.replace(/\D/g, ''); const msg = $('t-msg');
         if (phone.length < 10) { msg.textContent = 'Type a 10-digit cell number first.'; return; }

@@ -390,7 +390,8 @@ function doGet() { return ContentService.createTextOutput('ok'); }
 // property SIMPLETEXTING_KEY = the API token from SimpleTexting → Settings → API — the API is
 // enabled per account by SimpleTexting support; optional SIMPLETEXTING_NUMBER = the ward's
 // texting number, digits only, when it isn't the account's primary number) and/or an email
-// from this Google account. A "test" body ({ action: 'notify', test: true, phone, sms }) sends
+// from this Google account — or from the "From email" set under Leaders › Settings once that
+// address is a verified "Send mail as" alias of this Gmail. A "test" body ({ action: 'notify', test: true, phone, sms }) sends
 // just the text — the Settings page uses it to check the token. The page sends the already-filled-in wording, so it is exactly what the leader
 // saw in the confirmation box. Returns { ok, sms: 'sent'|'skipped'|'failed', email: … }.
 function sendFlagMessage_(b) {
@@ -417,9 +418,17 @@ function sendFlagMessage_(b) {
   if (b.email && b.body) {
     try {
       const opts = { name: b.fromName || 'North Point YSA Ward' };
-      if (b.replyTo) opts.replyTo = b.replyTo;
+      const fromEmail = String(b.fromEmail || '').trim().toLowerCase(), replyTo = String(b.replyTo || '').trim() || fromEmail;
+      if (replyTo) opts.replyTo = replyTo;
+      // Gmail only lets the script send "from" an address this Google account has verified under
+      // Settings → Accounts and Import → "Send mail as"; otherwise it goes from the account itself.
+      if (fromEmail) {
+        const alias = GmailApp.getAliases().filter(function (a) { return String(a).toLowerCase() === fromEmail; })[0];
+        if (alias) opts.from = alias;
+        else res.note = 'email went from ' + Session.getEffectiveUser().getEmail() + ' — ' + fromEmail + ' is not a "Send mail as" address of that Gmail account yet';
+      }
       GmailApp.sendEmail(b.email, b.subject || 'North Point YSA', b.body, opts);
-      res.email = 'sent';
+      res.email = 'sent'; res.from = opts.from || Session.getEffectiveUser().getEmail();
     } catch (e) { res.email = 'failed'; res.error = (res.error ? res.error + '; ' : '') + 'email: ' + (e && e.message); }
   }
   // one channel getting through counts as sent; res.error then explains the other one

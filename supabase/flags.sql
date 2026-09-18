@@ -74,7 +74,8 @@ grant execute on function public.admin_callings_pending(text) to anon;
 -- {first} = first name, {name} = full name. Leaders should review the wording before sending.
 insert into public.settings (key, value) values
   ('notify_from_name', 'North Point YSA Ward'),
-  ('notify_reply_to', ''),
+  ('notify_from_email', 'npysawardclerk@gmail.com'),   -- must be a "Send mail as" address of the Gmail running the script
+  ('notify_reply_to', 'npysawardclerk@gmail.com'),
   ('notify_warning_sms', 'Hi {first}, this is the North Point YSA bishopric. We love having you in the ward — attending here is optional, so if we don''t see you at church over the next few weeks we''ll plan to move your records back to your home ward. If you''d like to stay with us, just come on Sunday or reply here and let us know. — North Point YSA'),
   ('notify_warning_email_subject', 'Checking in from the North Point YSA bishopric'),
   ('notify_warning_email', 'Hi {first},
