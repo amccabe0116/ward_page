@@ -11,6 +11,14 @@ the email. Setup steps are at the top of that file. Re-running it is safe (it sk
 already published). If it ever breaks, `scripts/publish_announcements.py` does the same job
 from a raw `.eml`.
 
+## 1b. The weekly email now comes from the posts
+
+Leaders › Announcements → Email version builds it from the live posts. Send it from LCR's
+Send a Message (https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng): its editor keeps
+h1/h2/bold/links/lists from a formatted paste and drops images, so use Download flyers and drop
+the files into Attachments (jpg/png/pdf, 25 MB each). The Apps Script import of that email keeps
+running but the home page hides the imported text whenever there are posts.
+
 ## 2. Sync attendance with LCR (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
 
 LCR's page blocks calls to Supabase (CSP), so the sync is two halves that you shuttle between:

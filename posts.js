@@ -245,32 +245,46 @@ window.NPPosts = (function () {
     out.push('Everything, always up to date: ' + site);
     return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
   }
+  // Plain tags on purpose (h1 / h2 / p / strong / br / a): LCR's Send a Message editor keeps exactly
+  // those when you paste (checked 2026-09-18) and drops everything else, images included — so each
+  // post carries a "Flyer:" link instead, and the tool offers the flyers as downloads to attach.
   function emailHtml(posts, o) {
     o = o || {}; const site = o.site || 'https://northpointysa.com';
     const esc = s => NP.escapeHtml(String(s || ''));
     const para = t => linkify(String(t || '').trim()).replace(/\n/g, '<br>');
     const h = [];
-    h.push(`<div style="font-family:Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1d2230;max-width:600px">`);
-    if (o.title) h.push(`<h1 style="font-family:Georgia,serif;font-size:24px;margin:0 0 12px;color:#1b2a41">${esc(o.title)}</h1>`);
-    if (o.header) h.push(`<div style="background:#f2ecdd;border-radius:10px;padding:12px 14px;margin:0 0 18px;font-size:14px">${para(o.header)}</div>`);
+    if (o.title) h.push(`<h1>${esc(o.title)}</h1>`);
+    if (o.header) h.push(`<p>${para(o.header)}</p>`);
     for (const [name, list] of emailSections(posts)) {
-      h.push(`<h2 style="font-family:Georgia,serif;font-size:19px;margin:22px 0 10px;color:#1b2a41;border-bottom:1px solid #e6e2d8;padding-bottom:6px">${esc(name)}</h2>`);
+      h.push(`<h2>${esc(name)}</h2>`);
       for (const p of list) {
         const w = whenLine(p);
-        h.push(`<div style="margin:0 0 18px;padding:0 0 14px;border-bottom:1px solid #eee">`);
-        if (w) h.push(`<div style="font-size:13px;font-weight:700;color:#8a6d1f;text-transform:uppercase;letter-spacing:.03em">${esc(w)}</div>`);
-        h.push(`<div style="font-size:17px;font-weight:700;margin:2px 0 4px">${esc(p.title)}</div>`);
-        if (p.location) h.push(`<div style="color:#6b7280;font-size:14px">${esc(p.location)}</div>`);
-        if (p.details) h.push(`<div style="margin:6px 0 0">${para(p.details)}</div>`);
-        if (p.link) h.push(`<div style="margin:8px 0 0"><a href="${esc(p.link)}" style="color:#1b2a41;font-weight:700">${esc(linkLabel(p.link))} →</a></div>`);
-        if (p.flyer_url) h.push(`<div style="margin:10px 0 0"><a href="${esc(p.flyer_url)}"><img src="${esc(p.flyer_url)}" alt="${esc(p.title)} flyer" style="max-width:100%;width:360px;border-radius:10px;border:1px solid #e6e2d8"></a></div>`);
-        h.push(`</div>`);
+        const lines = [`<strong>${esc(w ? w + ' — ' + p.title : p.title)}</strong>`];
+        if (p.location) lines.push(esc(p.location));
+        if (p.details) lines.push(para(p.details));
+        if (p.link) lines.push(`<a href="${esc(p.link)}">${esc(linkLabel(p.link).replace(/ · .*$/, ''))}: ${esc(p.link)}</a>`);
+        if (p.flyer_url) lines.push(`<a href="${esc(p.flyer_url)}">Flyer: ${esc(p.flyer_url)}</a>`);
+        h.push(`<p>${lines.join('<br>')}</p>`);
       }
     }
-    if (o.footer) h.push(`<div style="margin:18px 0 0;padding:12px 14px;background:#f2ecdd;border-radius:10px;font-size:14px">${para(o.footer)}</div>`);
-    h.push(`<p style="color:#6b7280;font-size:13px;margin:16px 0 0">Everything, always up to date: <a href="${site}" style="color:#1b2a41">${site.replace(/^https?:\/\//, '')}</a></p>`);
-    h.push(`</div>`);
+    if (o.footer) h.push(`<p>${para(o.footer)}</p>`);
+    h.push(`<p>Everything, always up to date: <a href="${site}">${site.replace(/^https?:\/\//, '')}</a></p>`);
     return h.join('\n');
+  }
+  // "Download flyers": every live flyer as a file, named after its post, so they can be dropped
+  // into the email's Attachments box (LCR: jpg/png/pdf up to 25 MB each).
+  async function downloadFlyers(posts) {
+    const withFlyer = posts.filter(p => p.flyer_url); let n = 0;
+    for (const p of withFlyer) {
+      try {
+        const r = await fetch(p.flyer_url); if (!r.ok) throw new Error(r.status);
+        const blob = await r.blob(); const ext = /png/.test(blob.type) ? 'png' : 'jpg';
+        const name = String(++n).padStart(2, '0') + '-' + p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) + '.' + ext;
+        const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.appendChild(a); a.click(); a.remove();
+        await new Promise(r => setTimeout(r, 400));
+      } catch (e) { window.open(p.flyer_url, '_blank'); }
+    }
+    return n;
   }
   const EMAIL_DEFAULTS = {
     header: `Ward text list: text your name and “please add me” to 770-470-3577
@@ -282,5 +296,5 @@ Meet with the Bishop: https://northpointysa.com/bishop.html`.replace(/^(WhatsApp
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, EMAIL_DEFAULTS };
 })();

@@ -93,11 +93,11 @@
         <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
         <div class="card" id="post-email-panel" style="margin-top:12px" hidden>
           <div class="inline" style="justify-content:space-between"><h3 style="margin:0">The weekly email, from the posts</h3><button class="chip" id="pe-close">Close</button></div>
-          <p class="muted">Everything that is live on the home page right now, in date order. Copy it into the LCR message (or Gmail) — <b>Copy formatted</b> keeps the headings and images, <b>Copy plain text</b> is the safe choice for LCR.</p>
+          <p class="muted">Everything live on the home page right now, in date order. In LCR (<a href="https://lcr.churchofjesuschrist.org/mlt/messaging?lang=eng" target="_blank" rel="noopener">Send a Message</a>): paste the subject, <b>Copy formatted</b> and paste into the message — headings, bold, links and lists come through; images don't, so use <b>Download flyers</b> and drop the files into the Attachments box. <b>Copy plain text</b> is there if you ever need it.</p>
           <div class="field"><label for="pe-title">Subject / title</label><input id="pe-title" type="text"></div>
           <div class="field"><label for="pe-header">Top of the email <span class="opt">(the contact-us block — same every week)</span></label><textarea id="pe-header" rows="6"></textarea></div>
           <div class="field"><label for="pe-footer">Bottom of the email</label><textarea id="pe-footer" rows="2"></textarea></div>
-          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
+          <div class="inline"><button class="btn small secondary" id="pe-save">Save wording</button><button class="btn small" id="pe-copy-html">Copy formatted</button><button class="btn small secondary" id="pe-flyers">Download flyers</button><button class="btn small secondary" id="pe-copy-text">Copy plain text</button><span class="muted" id="pe-msg"></span></div>
           <h4 class="pe-title">Preview</h4>
           <div id="pe-preview" style="border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff"></div>
           <details style="margin-top:12px"><summary class="muted">Plain-text version</summary><textarea id="pe-plain" rows="18" readonly style="width:100%;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:13px"></textarea></details>
@@ -262,7 +262,7 @@
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=22"></script>
-  <script src="posts.js?v=3"></script>
+  <script src="posts.js?v=4"></script>
   <script src="overview.js?v=1"></script>
   <script>
     (function () {
@@ -636,6 +636,7 @@
         } catch (e) { $('pe-msg').textContent = 'Copy failed (' + e.message + ') — select the text below and copy it by hand.'; }
       }
       $('pe-copy-html').addEventListener('click', () => copyEmail(true));
+      $('pe-flyers').addEventListener('click', async () => { $('pe-msg').textContent = 'Downloading…'; const n = await NPPosts.downloadFlyers(livePosts); $('pe-msg').textContent = n ? n + ' flyer' + (n === 1 ? '' : 's') + ' downloaded — drag them into the Attachments box in LCR.' : 'No flyers on the live posts.'; });
       $('pe-copy-text').addEventListener('click', () => copyEmail(false));
 
       // ---- settings ----
