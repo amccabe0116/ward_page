@@ -87,7 +87,7 @@
       <!-- Announcements: posts (approve / edit / add) + the weekly email text -->
       <section class="pane" id="pane-announcements">
         <div class="inline" style="justify-content:space-between">
-          <span class="muted">Posts show on the home page in date order and drop off after their day (notices without a date stay 30 days). Anything sent in from the site waits here for approval.</span>
+          <span class="muted">Posts show on the home page in date order and expire by themselves — an event disappears the day after it happens, a notice without a date after 30 days. Anything sent in from the site waits here for approval.</span>
           <span class="inline"><button class="btn small secondary" id="post-email">Email version</button><button class="btn small" id="post-new">+ New post</button></span>
         </div>
         <div class="card" id="post-editor" style="margin-top:12px" hidden></div>
@@ -532,7 +532,9 @@
         const today = NPPosts.todayIso();
         const pending = posts.filter(p => p.status === 'pending');
         const live = posts.filter(p => p.status === 'approved' && (!p.event_date || p.event_date >= today));
-        const past = posts.filter(p => p.status === 'approved' && p.event_date && p.event_date < today);
+        // an event leaves the home page the day after it happens; here it lingers two weeks, then goes
+        const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+        const past = posts.filter(p => p.status === 'approved' && p.event_date && p.event_date < today && p.event_date >= cutoff);
         const rejected = posts.filter(p => p.status === 'rejected');
         $('posts-badge').textContent = pending.length; $('posts-badge').hidden = !pending.length;
         const section = (title, list, cls, empty) => {
