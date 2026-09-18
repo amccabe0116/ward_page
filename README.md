@@ -6,6 +6,7 @@ Sunday roll + weekly announcements for the North Point YSA Ward.
 index.html          landing: two class buttons + What's happening (posts in date order) + the weekly email
 post.html           share an announcement: anyone can submit a post (with a flyer) for leaders to approve
 calendar.html       subscribe to the ward calendar (calendar.ics) — Apple / Google / Outlook / any URL
+e.html              one post on its own page (?id=…) — the short link that goes into text reminders
 calendar.ics        every approved event, written by the Apps Script (syncCalendar); cal/<id>.ics = one event each
 posts.js            posts shared code: the card, the home-page list, the add/edit form, flyer resize + upload
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
@@ -137,6 +138,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    date from the card (*Upcoming — tap a date to cancel it*, `admin_post_skip` → `skip_dates`): the
    site and email show it as cancelled, and the calendar files carry the series as one event with an
    `RRULE` plus an `EXDATE` per cancelled date, so subscribers see the whole run and the gaps.
+   **Text a reminder** on a live post's card (Leaders › Announcements) sends one SimpleTexting
+   campaign to the ward list (Script property `SIMPLETEXTING_LIST`, "North Point Ward -
+   Notifications") through the Apps Script (web app action `remind`): the wording is shown first
+   — title, day, time, place and the post's short link `e.html?id=…` (the flyer and details on
+   their own page) — with the list's live contact count, and nothing goes out until *Send to N
+   people* plus the confirm. The script stamps `reminded_at` (`admin_post_reminded`, in
+   `supabase/repeat.sql`) so the card says when it was texted.
    The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were
    copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in

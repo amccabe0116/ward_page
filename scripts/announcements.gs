@@ -50,6 +50,8 @@
  *      "calendar") the moment a post is approved, edited, taken down or deleted. After pasting this
  *      version: function dropdown → syncCalendar → Run once, then Deploy → Manage deployments →
  *      edit → Version: New version → Deploy, so the web app picks it up.
+ *  11. "Text a reminder" on Leaders › Announcements sends one SimpleTexting campaign to the list in
+ *      SIMPLETEXTING_LIST (web app action "remind"). Nothing to set up beyond steps 8–9.
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -376,6 +378,7 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   notify → send a Warning / Magnet text + email (sendFlagMessage_)
 //   textlist → add the form's text opt-ins to the SimpleTexting list now (syncTextList)
 //   calendar → rebuild calendar.ics + cal/<id>.ics from the approved posts now (syncCalendar)
+//   remind   → text the ward list about a post (sendReminder_); { preview: true } just returns the list size
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
@@ -384,6 +387,7 @@ function doPost(e) {
     if (body.action === 'notify') return out(sendFlagMessage_(body));
     if (body.action === 'textlist') { const r = syncTextList(); r.ok = true; return out(r); }
     if (body.action === 'calendar') { const r = syncCalendar(); r.ok = true; return out(r); }
+    if (body.action === 'remind') return out(sendReminder_(body));
     if (body.action === 'save') {  // one person's edits → the sheet now (the "Save to sheet" button on a slide)
       const props = PropertiesService.getScriptProperties();
       const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
@@ -464,6 +468,42 @@ function sendFlagMessage_(b) {
   // one channel getting through counts as sent; res.error then explains the other one
   res.ok = res.sms === 'sent' || res.email === 'sent';
   if (!res.ok && !res.error) res.error = 'nothing to send (no phone/text or email/body)';
+  return res;
+}
+
+// "Text a reminder" on Leaders › Announcements: one SimpleTexting campaign to the ward list
+// (Script property SIMPLETEXTING_LIST, the same list the form opt-ins go to). The page sends the
+// wording it showed the leader; with { preview: true } this only looks the list up (name + how
+// many active contacts) so the confirmation can say "Send to 87 people". A successful send is
+// stamped on the post (admin_post_reminded, supabase/repeat.sql) so the card shows when it went.
+function sendReminder_(b) {
+  const props = PropertiesService.getScriptProperties();
+  const key = String(props.getProperty('SIMPLETEXTING_KEY') || '').trim().replace(/^(Authorization:\s*)?Bearer\s+/i, '');
+  if (!key) return { ok: false, error: 'no SimpleTexting key yet (SIMPLETEXTING_KEY in Script properties)' };
+  const list = props.getProperty('SIMPLETEXTING_LIST') || 'North Point Ward - Notifications';
+  const api = 'https://api-app2.simpletexting.com/v2/api', headers = { Authorization: 'Bearer ' + key };
+  const info = UrlFetchApp.fetch(api + '/contact-lists/' + encodeURIComponent(list), { headers: headers, muteHttpExceptions: true });
+  if (info.getResponseCode() >= 300) return { ok: false, error: 'SimpleTexting list "' + list + '": ' + info.getResponseCode() + ' ' + info.getContentText().slice(0, 200) };
+  const li = JSON.parse(info.getContentText() || '{}');
+  const contacts = Number(li.activeContactsCount != null ? li.activeContactsCount : li.totalContactsCount) || 0;
+  if (b.preview) return { ok: true, list: list, contacts: contacts };
+  const text = String(b.text || '').trim();
+  if (!text) return { ok: false, error: 'the message is empty' };
+  if (text.length > 900) return { ok: false, error: 'the message is too long (' + text.length + ' characters)' };
+  const payload = { title: ('Reminder: ' + String(b.title || 'post')).slice(0, 250), listIds: [list], messageTemplate: { mode: 'AUTO', text: text } };
+  const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
+  const r = UrlFetchApp.fetch(api + '/campaigns', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: headers, payload: JSON.stringify(payload) });
+  Logger.log('SimpleTexting campaign → %s: %s %s', list, r.getResponseCode(), r.getContentText().slice(0, 200));
+  if (r.getResponseCode() >= 300) return { ok: false, error: 'SimpleTexting ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200) };
+  const res = { ok: true, sent: true, list: list, contacts: contacts, campaignId: (JSON.parse(r.getContentText() || '{}') || {}).id || null };
+  if (b.postId) {
+    try {
+      const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY');
+      const m = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_post_reminded', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: props.getProperty('ADMIN_PASS'), p_id: Number(b.postId) }) });
+      if (m.getResponseCode() >= 300) res.note = 'sent, but could not stamp the post (run supabase/repeat.sql)';
+    } catch (e) { res.note = 'sent, but could not stamp the post: ' + (e && e.message); }
+  }
   return res;
 }
 

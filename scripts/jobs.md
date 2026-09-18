@@ -29,6 +29,11 @@ action `calendar`; "Rebuild calendar files" on the Email version panel does it b
 can't put an event into someone's calendar on its own (only registered senders like airlines get
 that from Gmail), so links + the subscription are the whole story.
 
+Repeats: a post can repeat weekly / every 2 weeks / monthly (supabase/repeat.sql); the lineup and
+the email show its next 1–4 dates, leaders cancel a single date from the card. Text a reminder on a
+card sends a SimpleTexting campaign to the ward list with the post's short link (e.html?id=…) —
+same Apps Script deployment, action `remind`.
+
 ## 2. Sync attendance with LCR (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
 
 LCR's page blocks calls to Supabase (CSP), so the sync is two halves that you shuttle between:

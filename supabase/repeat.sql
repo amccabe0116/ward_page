@@ -6,6 +6,7 @@
 --   repeat_show  how many upcoming occurrences the home page / email show at a time (1–4, default 2)
 --   skip_dates   occurrences that are cancelled — the site shows them as cancelled, the .ics gets
 --                an EXDATE, subscribers see them vanish
+--   reminded_at  when "Text a reminder" last went to the ward text list (also in this file)
 --
 -- The post's event_date is the first occurrence. The site works out the upcoming dates itself
 -- (posts.js occurrences()); the calendar files carry an RRULE (scripts/announcements.gs).
@@ -14,6 +15,7 @@ alter table public.posts add column if not exists repeat text check (repeat in (
 alter table public.posts add column if not exists repeat_until date;
 alter table public.posts add column if not exists repeat_show int not null default 2 check (repeat_show between 1 and 4);
 alter table public.posts add column if not exists skip_dates date[] not null default '{}';
+alter table public.posts add column if not exists reminded_at timestamptz;     -- last "Text a reminder" from the Leaders page
 
 -- A series is live while it still has occurrences left. (Dropped first: the return type grows.)
 drop function if exists public.posts_public();
@@ -135,3 +137,14 @@ begin
   return v_dates;
 end $$;
 grant execute on function public.admin_post_skip(text, bigint, date, boolean) to anon;
+
+-- The Leaders page's "Text a reminder" (a SimpleTexting campaign to the ward list, sent by the
+-- Apps Script) records when it went out, so the card can say so and nobody sends it twice by accident.
+create or replace function public.admin_post_reminded(p_pass text, p_id bigint)
+returns void
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform _check_admin(p_pass);
+  update posts set reminded_at = now() where id = p_id;
+end $$;
+grant execute on function public.admin_post_reminded(text, bigint) to anon;
