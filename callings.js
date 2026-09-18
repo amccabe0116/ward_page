@@ -45,6 +45,17 @@ window.NPCallings = (function () {
     return isNaN(d) ? null : d;
   }
   const fmtShort = d => d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  // "new" = moved in within this many days, by LCR's Move In Date
+  const NEW_DAYS = 30;
+  const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+  // LCR dates come as "3 Nov 2024"; also accepts 9/13/2026 and 2026-09-13. Local midnight or null.
+  function parseDay(s) {
+    s = String(s || '').trim(); let m;
+    if ((m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})$/))) { const mo = MONTHS[m[2].toLowerCase()]; return mo == null ? null : new Date(+m[3], mo, +m[1]); }
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) return new Date(+(m[3].length === 2 ? '20' + m[3] : m[3]), +m[1] - 1, +m[2]);
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+    return null;
+  }
   function rowObj(sheet, row) { const o = {}; sheet.headers.forEach((h, i) => { if (h) o[h] = row[i] || ''; }); return o; }
   function col(o, re) { const k = Object.keys(o).find(h => re.test(h)); return k ? o[k] : ''; }
 
@@ -161,7 +172,10 @@ window.NPCallings = (function () {
       const sentAt = sentM ? new Date(+(sentM[3].length === 2 ? '20' + sentM[3] : sentM[3]), +sentM[1] - 1, +sentM[2]) : null;
       const sentDays = sentAt ? Math.floor((Date.now() - sentAt.getTime()) / 864e5) : null;
       const dueDays = flag ? dueDaysFor(flag) : null;
-      return { name, sheetName, tag, section: sr ? sr.section : '', o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr, pending, editedAt: ed ? ed.updated_at : null,
+      const movedIn = lcr ? parseDay(lcr['Move In Date']) : null;
+      const movedDays = movedIn ? Math.floor((Date.now() - movedIn.getTime()) / 864e5) : null;
+      const isNew = movedDays !== null && movedDays >= 0 && movedDays <= NEW_DAYS;
+      return { name, sheetName, tag, section: sr ? sr.section : '', movedIn, movedDays, isNew, o, lcr, member, forms: findForm(variants, member) || [], notes, onSheet: !!sr, pending, editedAt: ed ? ed.updated_at : null,
         deleted: !!(ed && ed.deleted && !(sr && ed.synced_at && sheetAt > new Date(ed.synced_at))), flag, flagSent: o['Flag sent'] || '', sentAt, sentDays, dueDays, due: !!(flag && sentDays !== null && sentDays >= dueDays), tags,
         flagged: !!flag || tags.length > 0,
         proposed: o['Proposed calling'] || '', assignment: o['text assignment / calling'] || '',
@@ -209,7 +223,7 @@ window.NPCallings = (function () {
     magnet: { label: 'Magnet', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Magnet' },
     due: { label: 'Ready to move out', test: p => !p.sheetOnly && !p.deleted && p.due },
     other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && truthy(p.notes) },
-    new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (!!p.section || !p.onSheet) },
+    new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (p.isNew || !p.onSheet) },
     hasCalling: { label: 'Has a calling?', test: p => !!p.sheetOnly && !!(p.member && p.member.active) },
     sheetOnly: { label: 'Not in LCR', test: p => !!p.sheetOnly && !(p.member && p.member.active) },
     removed: { label: 'Removed / left off', test: p => !!p.deleted },
@@ -277,7 +291,7 @@ window.NPCallings = (function () {
         flagPill(p, { long: true }),
         p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null,
         ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
-        p.section ? el('span', { class: 'pill new' }, 'new') : null,
+        p.isNew ? el('span', { class: 'pill new', title: 'Moved in ' + fmtShort(p.movedIn) + ' (LCR)' }, 'new') : null,
         (!p.onSheet && p.lcr && !p.deleted) ? el('span', { class: 'pill new' }, 'not on sheet') : null,
         sheetOnlyPill(p),
         p.deleted ? el('span', { class: 'pill warn' }, p.onSheet ? 'Removed' : 'Left off the sheet') : null,
@@ -333,7 +347,7 @@ window.NPCallings = (function () {
         flagPill(p, { long: true }),
         p.due ? el('span', { class: 'pill due' }, 'Ready to move out') : null,
         ...p.tags.map(tg => el('span', { class: 'pill off' }, tg)),
-        p.section ? el('span', { class: 'pill new' }, p.section) : null,
+        p.isNew ? el('span', { class: 'pill new' }, 'New · moved in ' + (p.movedDays === 0 ? 'today' : p.movedDays === 1 ? 'yesterday' : p.movedDays + ' days ago')) : null,
         (!p.onSheet && p.lcr && !p.deleted) ? el('span', { class: 'pill new' }, 'Not on the sheet yet') : null,
         sheetOnlyPill(p),
         p.deleted ? el('span', { class: 'pill warn' }, p.onSheet ? 'Removed' + (p.pending ? ' · coming off the sheet' : '') : 'Left off the sheet on purpose') : null,

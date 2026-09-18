@@ -88,7 +88,8 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    pre-filled from LCR (location, age) and their newest move-in form (car, length of stay,
    mission, purpose, hobbies, music), stored as a site edit, and written to the Google Sheet right
    away. Needs `supabase/addrow.sql` (it widens the columns `admin_callings_edit` accepts).
-   Someone who is on LCR's report but deliberately has no row gets *Leave off the sheet* instead
+   The *new* tag means LCR's move-in date is within the last 30 days (`NEW_DAYS` in callings.js);
+   it expires on its own. Someone who is on LCR's report but deliberately has no row gets *Leave off the sheet* instead
    (an optional reason goes in their Other Notes): it uses the same `deleted` mark as Remove, so
    they drop out of New / not on sheet, *Add all* skips them, and *Back on the list* under the
    Removed / left off filter undoes it. For people with no sheet row the site's own edits are
