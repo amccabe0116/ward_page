@@ -24,6 +24,8 @@ window.NPPosts = (function () {
   const link = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>';
   const image = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>';
   const calendar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+  const share = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+  const SITE = 'https://northpointysa.com';
 
   // ---- dates & times ----
   function dateParts(iso) {           // 'YYYY-MM-DD' -> { dow, day, mon, long } (no time-zone shift)
@@ -161,6 +163,7 @@ window.NPPosts = (function () {
     const when = dp ? [relativeDay(p.event_date) || dp.dow, `${dp.mon} ${dp.d}`, timeRange(p)].filter(Boolean).join(' · ') : '';
     const details = String(p.details || '').trim();
     const cal = p.id && !p.cancelled ? calendarLinks(p) : null;      // the preview on post.html has no id yet
+    const canShare = !!p.id && !p.cancelled;
     const body = el('div', { class: 'post-body' }, [
       dp ? el('div', { class: 'post-when-row' }, [
         el('div', { class: 'post-when' + (p.cancelled ? ' cancelled' : relativeDay(p.event_date) ? ' soon' : '') }, [el('span', { class: 'ic', html: clock }), p.cancelled ? 'Cancelled · ' + when : when]),
@@ -170,7 +173,10 @@ window.NPPosts = (function () {
       p.location && !p.cancelled ? el('div', { class: 'post-where' }, [el('span', { class: 'ic', html: pin }), p.location]) : null,
       details && !compact ? el('div', { class: 'post-details', html: linkify(details) }) : null,
       p.link && !compact ? el('a', { class: 'post-link', href: p.link, target: '_blank', rel: 'noopener' }, [el('span', { class: 'ic', html: link }), linkLabel(p.link)]) : null,
-      cal ? el('div', { class: 'post-cal' }, [el('span', { class: 'ic', html: calendar }), 'Add to calendar: ', el('a', { href: cal.google, target: '_blank', rel: 'noopener' }, 'Google'), ' · ', el('a', { href: cal.ics }, 'Apple / Outlook')]) : null,
+      cal || canShare ? el('div', { class: 'post-foot' }, [
+        cal ? el('div', { class: 'post-cal' }, [el('span', { class: 'ic', html: calendar }), 'Add to calendar: ', el('a', { href: cal.google, target: '_blank', rel: 'noopener' }, 'Google'), ' · ', el('a', { href: cal.ics }, 'Apple / Outlook')]) : null,
+        canShare ? el('button', { class: 'post-share', type: 'button', title: 'Share this post', onclick: () => sharePost(p) }, [el('span', { class: 'ic', html: share }), 'Share']) : null,
+      ]) : null,
       opts.footer || null,
     ]);
     const art = el('article', { class: 'post' + (p.flyer_url && !compact ? ' has-flyer' : '') + (compact ? ' compact' : '') + (p.cancelled ? ' is-cancelled' : ''), 'data-id': p.id, 'data-date': p.event_date || null }, [
@@ -188,6 +194,21 @@ window.NPPosts = (function () {
   function linkLabel(url) {
     try { const u = new URL(url); const h = u.hostname.replace(/^www\./, ''); return /forms\.gle|docs\.google\.com\/forms|signup|rsvp/i.test(url) ? 'Sign up' : /eventbrite|meetup/i.test(h) ? 'Tickets & details' : 'More info · ' + h; }
     catch (e) { return 'More info'; }
+  }
+
+  // Share: the phone's share sheet where there is one (Messages, WhatsApp…), otherwise the link is
+  // copied. The link is the post's own page (e/<id>), which carries the preview tags — flyer,
+  // title and date show under it in most messaging apps.
+  async function sharePost(p) {
+    const src = p.series || p;
+    const url = `${SITE}/e/${src.id}`;
+    const text = [p.title, whenLine(p), p.location].filter(Boolean).join(' · ');
+    if (navigator.share) {
+      try { await navigator.share({ title: p.title, text, url }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(url); NP.toast('Link copied — paste it anywhere'); }
+    catch (e) { window.prompt('Copy this link', url); }
   }
 
   // ---- the home page list ----
@@ -443,5 +464,5 @@ Ward calendar: subscribe once at https://northpointysa.com/calendar.html and eve
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, occurrences, expand, repeatLabel, rrule, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, occurrences, expand, repeatLabel, rrule, sharePost, EMAIL_DEFAULTS };
 })();

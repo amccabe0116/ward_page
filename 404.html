@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>North Point YSA</title>
-  <!--og-->
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#1b2a41">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
@@ -14,10 +13,9 @@
   <link rel="stylesheet" href="/app.css?v=11">
 </head>
 <body>
-  <!-- One post, on its own page: the short link that goes into text reminders. Two forms:
-       e.html?id=5 (this file, always works) and e/5 — a copy the Apps Script publishes per live post
-       with the post's Open Graph tags in the head, so a text message previews the flyer. Paths are
-       absolute so the copy works from /e/. -->
+  <!-- GitHub Pages serves this for any missing path. A post link (e/<id>) whose page the script
+       hasn't published yet — a post approved a minute ago — still shows the post here; anything
+       else gets a plain "not found". -->
   <header class="hero compact">
     <a class="back" href="/">‹ Home</a>
     <p class="eyebrow">North Point YSA</p>
@@ -35,18 +33,17 @@
   <script>
     (function () {
       const box = document.getElementById('post');
-      const id = Number(window.NP_POST_ID || new URLSearchParams(location.search).get('id'));
-      const gone = () => { box.innerHTML = ''; box.appendChild(NP.el('p', { class: 'empty' }, 'That announcement isn’t up any more — it may have already happened.')); };
-      if (!id) return gone();
+      const m = location.pathname.match(/^\/e\/(\d+)/);
+      const notFound = msg => { document.getElementById('h').textContent = 'Not found'; box.innerHTML = ''; box.appendChild(NP.el('p', { class: 'empty' }, msg)); };
+      if (!m) return notFound('There’s nothing at this address.');
+      const id = Number(m[1]);
       NP.rpc('posts_public').then(rows => {
         const p = (rows || []).find(x => x.id === id);
-        if (!p) return gone();
+        if (!p) return notFound('That announcement isn’t up any more — it may have already happened.');
         document.title = p.title + ' · North Point YSA';
         document.getElementById('h').textContent = p.event_date ? 'Coming up' : 'Announcement';
-        box.innerHTML = '';
-        // a repeating post shows its next date (the card works that out itself)
-        box.appendChild(NPPosts.card(p));
-      }).catch(gone);
+        box.innerHTML = ''; box.appendChild(NPPosts.card(p));
+      }).catch(() => notFound('Could not load that announcement.'));
     })();
   </script>
 </body>
