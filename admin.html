@@ -621,20 +621,26 @@
       // The wording is shown first (editable), with how many people are on the list; nothing goes
       // out until "Send to N people" is tapped. The script stamps the post (reminded_at) afterwards.
       const gsm = t => t.replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, '\'').replace(/[\u201c\u201d]/g, '"').replace(/\u00b7/g, '-').replace(/\u2026/g, '...');
-      function reminderText(p) {
+      function reminderText(p, shortLink) {
         const site = 'https://northpointysa.com';
         const occ = p.event_date ? NPPosts.occurrences(p, 1).find(o => !o.cancelled) : null;
         const dp = occ ? NPPosts.dateParts(occ.date) : null;
         const t = NPPosts.todayIso(), [y, m, d] = t.split('-').map(Number), tm = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
         const day = occ ? (occ.date === t ? 'Today' : occ.date === tm ? 'Tomorrow' : dp.dow) : '';
         const when = dp ? day + ' ' + dp.mon + ' ' + dp.d + (p.start_time ? ' at ' + NPPosts.fmtTime(p.start_time) : '') : '';
-        return gsm('North Point YSA: ' + p.title + (when ? ' - ' + when : '') + (p.location ? ', ' + p.location : '') + '. Details' + (p.flyer_url ? ' + flyer' : '') + ': ' + site + '/e.html?id=' + p.id);
+        // e/<id> is the page the Google script publishes with the post's preview tags (flyer, title, date
+        // show under the link in Messages / WhatsApp); e.html?id= always works but previews plain
+        return gsm('North Point YSA: ' + p.title + (when ? ' - ' + when : '') + (p.location ? ', ' + p.location : '') + '. Details' + (p.flyer_url ? ' + flyer' : '') + ': ' + site + (shortLink ? '/e/' + p.id : '/e.html?id=' + p.id));
       }
+      const previewPageExists = id => fetch('e/' + id + '.html', { method: 'HEAD', cache: 'no-store' }).then(r => r.ok).catch(() => false);
       const smsSegments = t => { const n = [...t].length; return /[^\x00-\x7f]/.test(t) ? (n <= 70 ? 1 : Math.ceil(n / 67)) : (n <= 160 ? 1 : Math.ceil(n / 153)); };
       async function openReminder(p, cardEl) {
         cardEl.querySelectorAll('.remind-box').forEach(x => x.remove());
+        const hasPage = await previewPageExists(p.id);
         const ta = el('textarea', { rows: 4, maxlength: 900, style: 'width:100%' });
-        ta.value = reminderText(p);
+        ta.value = reminderText(p, hasPage);
+        const mms = el('input', { type: 'checkbox' });
+        const media = () => p.flyer_url && mms.checked ? p.flyer_url : '';
         const count = el('span', { class: 'muted small' }), listMsg = el('p', { class: 'muted small', style: 'margin:0' }, 'Checking the list…'), msg = el('span', { class: 'muted small' });
         const send = el('button', { class: 'btn small', type: 'button', disabled: '' }, 'Send');
         const paintCount = () => { const n = [...ta.value].length, seg = smsSegments(ta.value); count.textContent = n + ' characters · ' + seg + ' text' + (seg === 1 ? '' : 's') + (/[^\x00-\x7f]/.test(ta.value) ? ' (special characters shorten texts — plain quotes and dashes fit more)' : ''); };
@@ -645,7 +651,7 @@
           const digits = testPhone.value.replace(/\D/g, ''); if (digits.length < 10) { msg.textContent = 'Enter a 10-digit mobile number for the test.'; return; }
           testBtn.disabled = true; msg.textContent = 'Sending the test…';
           try {
-            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: 'Test', phone: digits, email: '', flag: 'test', sms: '[TEST] ' + ta.value.trim() }) }).then(x => x.json());
+            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: 'Test', phone: digits, email: '', flag: 'test', sms: '[TEST] ' + ta.value.trim(), media: media() }) }).then(x => x.json());
             if (!r.ok || r.sms !== 'sent') throw new Error(r.error || ('text ' + r.sms));
             try { localStorage.setItem('np_test_phone', digits); } catch (e) {}
             msg.textContent = 'Test sent to ' + digits.replace(/(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') + ' — nothing went to the list.';
@@ -656,7 +662,9 @@
           el('b', {}, 'Text a reminder'),
           listMsg,
           p.reminded_at ? el('p', { class: 'muted small', style: 'margin:0' }, 'A reminder for this already went out ' + whenShort(p.reminded_at) + '.') : null,
+          !hasPage ? el('p', { class: 'muted small', style: 'margin:0' }, 'This post’s preview page isn’t published yet, so the link won’t show the flyer under the text — Rebuild calendar files (Email version) and wait a minute, then reopen this.') : null,
           ta, count,
+          p.flyer_url ? el('label', { class: 'inline muted small', style: 'gap:6px' }, [mms, 'Attach the flyer as a picture (MMS — uses more credits per text than a link)']) : null,
           el('div', { class: 'inline' }, [testBtn, testPhone, el('span', { class: 'muted small' }, 'first, if you like')]),
           el('div', { class: 'inline' }, [send, el('button', { class: 'chip', type: 'button', onclick: () => box.remove() }, 'Cancel'), msg]),
         ]);
@@ -674,7 +682,7 @@
           if (!confirm('Send this text to ' + contacts + ' people on “' + list + '”?\n\n' + text)) return;
           send.disabled = true; msg.textContent = 'Sending…';
           try {
-            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'remind', pass, postId: p.id, title: p.title, text }) }).then(x => x.json());
+            const r = await fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'remind', pass, postId: p.id, title: p.title, text, media: media() }) }).then(x => x.json());
             if (!r.ok) throw new Error(r.error || 'unknown error');
             toast('Sent to ' + r.contacts + ' people' + (r.note ? ' — ' + r.note : ''), 5000); box.remove(); await loadPosts();
           } catch (e) { msg.textContent = 'Not sent: ' + e.message; send.disabled = false; }

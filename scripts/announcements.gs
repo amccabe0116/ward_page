@@ -378,7 +378,8 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   notify → send a Warning / Magnet text + email (sendFlagMessage_)
 //   textlist → add the form's text opt-ins to the SimpleTexting list now (syncTextList)
 //   calendar → rebuild calendar.ics + cal/<id>.ics from the approved posts now (syncCalendar)
-//   remind   → text the ward list about a post (sendReminder_); { preview: true } just returns the list size
+//   remind   → text the ward list about a post (sendReminder_); { preview: true } just returns the list size;
+//              { media: <flyer url> } sends it as a picture (MMS)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
@@ -439,6 +440,7 @@ function sendFlagMessage_(b) {
       // SimpleTexting wants a 10-digit US number ("3051234567"); drop a leading 1 if LCR gave 11 digits
       const digits = phone.length === 11 && phone[0] === '1' ? phone.slice(1) : phone;
       const payload = { contactPhone: digits, mode: 'AUTO', text: b.sms };
+      if (b.media && /^https:\/\//.test(b.media)) { payload.mediaItems = [String(b.media)]; payload.mode = 'MMS_PREFERRED'; }   // a picture along (the reminder test)
       const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
       const r = UrlFetchApp.fetch('https://api-app2.simpletexting.com/v2/api/messages', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -491,6 +493,7 @@ function sendReminder_(b) {
   if (!text) return { ok: false, error: 'the message is empty' };
   if (text.length > 900) return { ok: false, error: 'the message is too long (' + text.length + ' characters)' };
   const payload = { title: ('Reminder: ' + String(b.title || 'post')).slice(0, 250), listIds: [list], messageTemplate: { mode: 'AUTO', text: text } };
+  if (b.media && /^https:\/\//.test(b.media)) { payload.messageTemplate.mediaItems = [String(b.media)]; payload.messageTemplate.mode = 'MMS_PREFERRED'; }   // the flyer as a picture
   const from = props.getProperty('SIMPLETEXTING_NUMBER'); if (from) payload.accountPhone = from.replace(/\D/g, '');
   const r = UrlFetchApp.fetch(api + '/campaigns', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: headers, payload: JSON.stringify(payload) });
   Logger.log('SimpleTexting campaign → %s: %s %s', list, r.getResponseCode(), r.getContentText().slice(0, 200));
@@ -529,6 +532,8 @@ function isLeader_(pass) {
 //                  weeks of past ones.
 //   cal/<id>.ics   one event each, for the "Add to calendar" links on the home page and in the
 //                  weekly email (Apple / Outlook; Google users get a calendar.google.com link).
+//   e/<id>.html    one page per live post: e.html with the post's Open Graph tags (title, date, flyer)
+//                  in the head, so the short link in a text reminder shows a preview with the flyer.
 // Runs at the end of every syncMemberSheets and right away from the Leaders page (web app action
 // "calendar") after a post is approved, edited, taken down or deleted. Only files whose content
 // actually changed are committed, so a run with nothing new makes no commits at all.
@@ -565,6 +570,10 @@ function syncCalendar() {
   // what is on the site now (one listing call each; a missing folder is fine on the first run)
   const dir = ghGet_(token, 'cal'); const have = {};
   (Array.isArray(dir) ? dir : []).forEach(function (f) { if (f.type === 'file') have[f.name] = f.sha; });
+  const pdir = ghGet_(token, 'e'); const havePage = {};
+  (Array.isArray(pdir) ? pdir : []).forEach(function (f) { if (f.type === 'file') havePage[f.name] = f.sha; });
+  const tplFile = ghGet_(token, 'e.html');
+  const tpl = tplFile && tplFile.content ? Utilities.newBlob(Utilities.base64Decode(tplFile.content.replace(/\n/g, ''))).getDataAsString() : '';
   const cur = ghGet_(token, 'calendar.ics');
   if (cur && cur.content && gitBlobSha_(Utilities.newBlob(Utilities.base64Decode(cur.content.replace(/\n/g, ''))).getDataAsString()) !== cur.sha) Logger.log('Warning: the blob-sha check disagrees with GitHub, so unchanged files will be re-committed each run');
 
@@ -583,6 +592,18 @@ function syncCalendar() {
   Object.keys(have).forEach(function (name) {
     if (/\.ics$/.test(name) && !keep[name]) { ghDelete_(token, 'cal/' + name, have[name], 'Calendar: remove ' + name); summary.deleted.push('cal/' + name); }
   });
+  // 2b. one page per live post (dated or not): e/<id>.html — e.html with the post's Open Graph tags,
+  //     so the short link in a text reminder previews the flyer, title and date
+  if (tpl) {
+    const keepPage = {};
+    all.filter(function (p) { return p.status === 'approved' && (!p.event_date ? Date.parse(p.created_at) > Date.now() - 30 * 864e5 : alive(p, dayIso(CAL_LINK_PAST_DAYS))); }).forEach(function (p) {
+      const name = p.id + '.html'; keepPage[name] = true;
+      put('e/' + name, eventPage_(tpl, p), havePage[name], 'Page: ' + p.title);
+    });
+    Object.keys(havePage).forEach(function (name) {
+      if (/\.html$/.test(name) && !keepPage[name]) { ghDelete_(token, 'e/' + name, havePage[name], 'Page: remove ' + name); summary.deleted.push('e/' + name); }
+    });
+  } else Logger.log('e.html not found in the repo — no per-post pages written');
   // 3. the subscribable calendar
   put('calendar.ics', icsCalendar_(events, stamp, CAL_NAME), cur && cur.sha, 'Calendar: ' + events.length + ' events');
   Logger.log(JSON.stringify(summary));
@@ -598,7 +619,10 @@ function icsCalendar_(posts, stamp, name) {
 }
 function icsEvent_(p, stamp) {
   const span = eventSpan_(p);
-  const lines = ['BEGIN:VEVENT', 'UID:post-' + p.id + '@northpointysa.com', 'DTSTAMP:' + stamp];
+  // DTSTAMP = the post's last edit, not "now": the file only changes when the post does, so the
+  // unchanged-file check can actually skip it (a fresh stamp every run meant a commit every run)
+  const edited = Date.parse(p.updated_at || p.reviewed_at || p.created_at);
+  const lines = ['BEGIN:VEVENT', 'UID:post-' + p.id + '@northpointysa.com', 'DTSTAMP:' + (edited ? icsStamp_(new Date(edited)) : stamp)];
   if (span.allDay) lines.push('DTSTART;VALUE=DATE:' + span.start, 'DTEND;VALUE=DATE:' + span.end);
   else lines.push('DTSTART:' + span.start, 'DTEND:' + span.end);
   const rule = rrule_(p); if (rule) lines.push('RRULE:' + rule);
@@ -634,6 +658,39 @@ function zonedToUtc_(iso, time) {
   const off = Utilities.formatDate(new Date(naive), CAL_TZ, 'Z');           // e.g. -0400 at that moment
   const mins = (off[0] === '-' ? -1 : 1) * (Number(off.slice(1, 3)) * 60 + Number(off.slice(3, 5)));
   return new Date(naive - mins * 60000);
+}
+// e.html with the post's Open Graph tags in the head and the id preset: what iMessage / WhatsApp /
+// Facebook read (without running any script) to show the flyer, title and date under a link.
+function eventPage_(tpl, p) {
+  const esc = function (s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  const desc = [whenText_(p), p.location].filter(Boolean).join(' · ') || String(p.details || '').replace(/\s+/g, ' ').slice(0, 160);
+  const tags = [
+    '<meta property="og:site_name" content="North Point YSA">',
+    '<meta property="og:type" content="article">',
+    '<meta property="og:url" content="' + SITE + '/e/' + p.id + '">',
+    '<meta property="og:title" content="' + esc(p.title) + '">',
+    '<meta property="og:description" content="' + esc(desc) + '">',
+    '<meta name="description" content="' + esc(desc) + '">',
+    p.flyer_url ? '<meta property="og:image" content="' + esc(p.flyer_url) + '">' : '',
+    p.flyer_url ? '<meta name="twitter:card" content="summary_large_image">' : '',
+    p.flyer_url ? '<meta name="twitter:image" content="' + esc(p.flyer_url) + '">' : '',
+    '<script>window.NP_POST_ID = ' + Number(p.id) + ';</script>',
+  ].filter(Boolean).join('\n  ');
+  return tpl.replace('<title>North Point YSA</title>', '<title>' + esc(p.title) + ' · North Point YSA</title>').replace('<!--og-->', tags);
+}
+// 'Saturday, Sep 26 · 6 – 9 PM' / 'Every Tuesday · 7 PM' / '' for a notice
+function whenText_(p) {
+  if (!p.event_date) return '';
+  const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = String(p.event_date).slice(0, 10).split('-').map(Number), dow = new Date(Date.UTC(d[0], d[1] - 1, d[2])).getUTCDay();
+  const t = function (v) { if (!v) return ''; const h = Number(String(v).slice(0, 2)), m = Number(String(v).slice(3, 5)); return (((h + 11) % 12) + 1) + (m ? ':' + ('0' + m).slice(-2) : '') + ' ' + (h >= 12 ? 'PM' : 'AM'); };
+  let time = t(p.start_time); if (time && p.end_time) { const e = t(p.end_time); time = time.slice(-2) === e.slice(-2) ? time.slice(0, -3) + ' – ' + e : time + ' – ' + e; }
+  let day;
+  if (p.repeat === 'weekly') day = 'Every ' + DAYS[dow];
+  else if (p.repeat === 'biweekly') day = 'Every other ' + DAYS[dow];
+  else if (p.repeat === 'monthly') day = 'Every ' + ['1st', '2nd', '3rd', '4th', 'last'][Math.min(5, Math.ceil(d[2] / 7)) - 1] + ' ' + DAYS[dow];
+  else day = DAYS[dow] + ', ' + MON[d[1] - 1] + ' ' + d[2];
+  return day + (time ? ' · ' + time : '');
 }
 // weekly / every 2 weeks / monthly on the same weekday (1st Tuesday…), optionally until a date
 function rrule_(p) {

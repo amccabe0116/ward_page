@@ -6,7 +6,7 @@ Sunday roll + weekly announcements for the North Point YSA Ward.
 index.html          landing: two class buttons + What's happening (posts in date order) + the weekly email
 post.html           share an announcement: anyone can submit a post (with a flyer) for leaders to approve
 calendar.html       subscribe to the ward calendar (calendar.ics) — Apple / Google / Outlook / any URL
-e.html              one post on its own page (?id=…) — the short link that goes into text reminders
+e.html              one post on its own page (?id=…); e/<id>.html = the script's copy with Open Graph tags (the link in texts)
 calendar.ics        every approved event, written by the Apps Script (syncCalendar); cal/<id>.ics = one event each
 posts.js            posts shared code: the card, the home-page list, the add/edit form, flyer resize + upload
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
@@ -145,7 +145,13 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    their own page) — with the list's live contact count, and nothing goes out until *Send to N
    people* plus the confirm. *Text a test to <your mobile>* sends the same wording to one phone
    first (the single-number path, web app action `notify`; the number is remembered on that device). The script stamps `reminded_at` (`admin_post_reminded`, in
-   `supabase/repeat.sql`) so the card says when it was texted.
+   `supabase/repeat.sql`) so the card says when it was texted. The link is `e/<id>` — a copy of
+   `e.html` the script publishes per live post with the post's Open Graph tags (title, when,
+   flyer as `og:image`), which is what Messages / WhatsApp read to show a preview under a link
+   (they don't run scripts, so `e.html?id=` alone previews plain); the box falls back to
+   `e.html?id=` and says so if that page isn't published yet. *Attach the flyer as a picture*
+   sends it as MMS instead (more credits per text). *Text a test to <your mobile>* sends the
+   same thing to one phone first.
    The old email import keeps running, but the home page
    only shows that block when there are no posts. Flyers from the September 2026 email were
    copied into `img/posts/` (stable names; `img/ann-*` is wiped weekly). Everything is in
