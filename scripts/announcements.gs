@@ -386,6 +386,23 @@ function doPost(e) {
 }
 function doGet() { return ContentService.createTextOutput('ok'); }
 
+// Texts coming back "401 Tenant not found"? Function dropdown → checkSimpleTexting → Run, then
+// read the execution log: it shows what the key looks like (length + last 2 characters, never
+// the key itself) and how each SimpleTexting API host answers it.
+function checkSimpleTexting() {
+  const raw = PropertiesService.getScriptProperties().getProperty('SIMPLETEXTING_KEY');
+  const key = String(raw || '').trim().replace(/^(Authorization:\s*)?Bearer\s+/i, '');
+  if (!key) { Logger.log('SIMPLETEXTING_KEY is empty / missing in Script properties'); return; }
+  Logger.log('SIMPLETEXTING_KEY: %s characters, ends with "…%s"%s', key.length, key.slice(-2), raw !== key ? ' (had spaces or a Bearer prefix — ignored)' : '');
+  [['API v2 (api-app2.simpletexting.com)', 'https://api-app2.simpletexting.com/v2/api/contact-lists?size=1'],
+   ['API v1 (app2.simpletexting.com)',     'https://app2.simpletexting.com/v1/messaging/check']].forEach(function (t) {
+    try {
+      const r = UrlFetchApp.fetch(t[1], { muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + key } });
+      Logger.log('%s → %s %s', t[0], r.getResponseCode(), r.getContentText().slice(0, 200));
+    } catch (e) { Logger.log('%s → %s', t[0], e && e.message); }
+  });
+}
+
 // Warning / Magnet message from a person's slide: a text through SimpleTexting (script
 // property SIMPLETEXTING_KEY = the API token from SimpleTexting → Settings → API — the API is
 // enabled per account by SimpleTexting support; optional SIMPLETEXTING_NUMBER = the ward's
