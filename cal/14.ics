@@ -9,10 +9,12 @@ X-PUBLISHED-TTL:PT1H
 REFRESH-INTERVAL;VALUE=DURATION:PT1H
 BEGIN:VEVENT
 UID:post-14@northpointysa.com
-DTSTAMP:20260920T025153Z
-DTSTART;VALUE=DATE:20261025
-DTEND;VALUE=DATE:20261026
+DTSTAMP:20260920T025600Z
+DTSTART:20261025T230000Z
+DTEND:20261026T000000Z
+RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261116T045900Z
 SUMMARY:Stake Conference Choir - Invitation
+LOCATION:Roswell Stake Center\, 500 Norcross Street
 DESCRIPTION:Rehearsals: Four 1-hour practices on Sunday evenings—October
   25\, November 1\, November 8\, and November 15—from 7:00 pm to 8:00 pm
   in the Roswell Stake Center chapel.\n\nPerformance: Sunday\, November 
@@ -27,7 +29,7 @@ DESCRIPTION:Rehearsals: Four 1-hour practices on Sunday evenings—October
  ways up to date: https://northpointysa.com
 URL:https://forms.gle/Ht1tdQE3R5khzroC9
 CREATED:20260920T025122Z
-LAST-MODIFIED:20260920T025153Z
-SEQUENCE:0
+LAST-MODIFIED:20260920T025600Z
+SEQUENCE:4
 END:VEVENT
 END:VCALENDAR
