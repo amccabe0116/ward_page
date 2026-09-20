@@ -52,6 +52,9 @@
  *      edit → Version: New version → Deploy, so the web app picks it up.
  *  11. "Text a reminder" on Leaders › Announcements sends one SimpleTexting campaign to the list in
  *      SIMPLETEXTING_LIST (web app action "remind"). Nothing to set up beyond steps 8–9.
+ *  12. Bishop meeting requests: bishop.html pokes the web app (action "bishop") and the executive
+ *      secretary gets a text (site setting bishop_notify_phone, Leaders › Settings). Needs
+ *      supabase/bishop.sql; the web app must be deployed with "Who has access: Anyone" (it is).
  *
  * Each run: finds the newest announcements email from the last 8 days (Trash included, since
  * those get deleted regularly), turns the body into clean text, uploads every image/PDF
@@ -180,6 +183,8 @@ function syncMemberSheets() {
   }
   // 3. approved posts → calendar.ics + cal/<id>.ics on the site (drops events that have passed)
   try { result.calendar = syncCalendar(); } catch (e) { Logger.log('Calendar sync failed: %s', e && e.message); result.calendarError = String(e && e.message); }
+  // 4. Bishop meeting requests nobody was texted about yet (needs supabase/bishop.sql)
+  try { result.bishop = sweepBishopRequests_(); } catch (e) { Logger.log('Bishop sweep failed: %s', e && e.message); }
   return result;
 }
 
@@ -380,10 +385,13 @@ function writePendingEdits_(sbUrl, sbKey, adminPass, onlyNames) {
 //   calendar → rebuild calendar.ics + cal/<id>.ics from the approved posts now (syncCalendar)
 //   remind   → text the ward list about a post (sendReminder_); { preview: true } just returns the list size;
 //              { media: <flyer url> } sends it as a picture (MMS)
+//   bishop   → { id } from bishop.html, no passphrase: text the exec secretary about that meeting request
+//              (notifyBishop_ — the database hands the request over once, so a repeat poke sends nothing)
 function doPost(e) {
   const out = function (o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); };
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (body.action === 'bishop') return out(notifyBishop_(Number(body.id)));   // public poke: only ever texts a real, unclaimed request once
     if (!isLeader_(body.pass)) return out({ ok: false, error: 'not authorized' });
     if (body.action === 'notify') return out(sendFlagMessage_(body));
     if (body.action === 'textlist') { const r = syncTextList(); r.ok = true; return out(r); }
@@ -471,6 +479,49 @@ function sendFlagMessage_(b) {
   res.ok = res.sms === 'sent' || res.email === 'sent';
   if (!res.ok && !res.error) res.error = 'nothing to send (no phone/text or email/body)';
   return res;
+}
+
+// A new "meet with the Bishop" request → one text to the number in the site setting
+// bishop_notify_phone (Leaders › Settings). bishop.html pokes the web app with the request id right
+// after submitting (no secret involved: the page is public); this asks the database to CLAIM the
+// request (supabase/bishop.sql), which succeeds exactly once and only for a real, recent request —
+// so a stray or repeated poke can never send a second text. If the text fails the claim is released
+// and the 6-hourly sweep (sweepBishopRequests_, from syncMemberSheets) tries again.
+function notifyBishop_(id) {
+  if (!id) return { ok: false, error: 'no id' };
+  const props = PropertiesService.getScriptProperties();
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  const call = function (fn, payload) {
+    const r = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/' + fn, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify(Object.assign({ p_pass: adminPass }, payload)) });
+    if (r.getResponseCode() >= 300) throw new Error(fn + ' → ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 160));
+    return JSON.parse(r.getContentText() || 'null');
+  };
+  let to = '';
+  try { to = String((call('admin_get_settings', {}).filter(function (x) { return x.key === 'bishop_notify_phone'; })[0] || {}).value || '').replace(/\D/g, ''); } catch (e) { return { ok: false, error: String(e && e.message) }; }
+  if (to.length < 10) return { ok: true, skipped: 'no number set' };
+  let rows;
+  try { rows = call('admin_meeting_request_claim', { p_id: id, p_claim: true }); } catch (e) { return { ok: false, error: /admin_meeting_request_claim/.test(String(e)) ? 'run supabase/bishop.sql' : String(e && e.message) }; }
+  const q = rows && rows[0]; if (!q) return { ok: true, skipped: 'already texted, or not a recent request' };
+  const bits = ['North Point YSA: ' + q.name + ' asked to meet with the Bishop' + (q.temple_recommend ? ' (temple recommend interview)' : '') + '.', 'Reach them at ' + q.phone + (q.email ? ' or ' + q.email : '') + '.'];
+  if (q.note) bits.push('Note: ' + String(q.note).replace(/\s+/g, ' ').slice(0, 300).replace(/[.\s]+$/, '') + '.');
+  bits.push('Leaders > Inbox: https://northpointysa.com/admin.html');
+  const res = sendFlagMessage_({ phone: to, sms: bits.join(' '), email: '' });
+  if (res.sms !== 'sent') { try { call('admin_meeting_request_claim', { p_id: id, p_claim: false }); } catch (e) {} return { ok: false, error: res.error || 'text not sent' }; }
+  Logger.log('Bishop request %s → texted %s', id, to);
+  return { ok: true, sent: true };
+}
+// Any recent request nobody texted (the page's poke got lost, or the text failed) — from syncMemberSheets.
+function sweepBishopRequests_() {
+  const props = PropertiesService.getScriptProperties();
+  const sbUrl = props.getProperty('SUPABASE_URL'), sbKey = props.getProperty('SUPABASE_KEY'), adminPass = props.getProperty('ADMIN_PASS');
+  const r = UrlFetchApp.fetch(sbUrl + '/rest/v1/rpc/admin_meeting_requests', { method: 'post', contentType: 'application/json', muteHttpExceptions: true, headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }, payload: JSON.stringify({ p_pass: adminPass, p_include_handled: false }) });
+  if (r.getResponseCode() >= 300) return { error: r.getResponseCode() };
+  const out = { texted: 0, skipped: 0 };
+  JSON.parse(r.getContentText() || '[]').forEach(function (q) {
+    if (q.notified_at || Date.parse(q.created_at) < Date.now() - 2 * 864e5) return;
+    const res = notifyBishop_(q.id); if (res.sent) out.texted++; else out.skipped++;
+  });
+  return out;
 }
 
 // "Text a reminder" on Leaders › Announcements: one SimpleTexting campaign to the ward list

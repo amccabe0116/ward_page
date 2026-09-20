@@ -39,6 +39,7 @@ supabase/keys.sql                 high-score board for the mini game (keys_submi
 supabase/addrow.sql               Add to sheet: lets the site pre-fill the callings sheet's intake columns
 supabase/posts.sql                posts (events / notices with flyers), public submission, approval, the "flyers" storage bucket
 supabase/repeat.sql               repeating posts (weekly / every 2 weeks / monthly), cancelling one date
+supabase/bishop.sql               Bishop meeting requests texted to the executive secretary (claim-once + the number setting)
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -173,6 +174,16 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    removes anyone, and a later "Opt out" answer from the same number cancels an earlier "agree".
    Runs after each sheet sync and from Leaders › Settings → Sync now. The consent wording on the
    form links to `terms.html` and `privacy.html` (texting-only, not linked from the site).
+
+9. **Bishop meeting requests → a text.** `bishop.html` stores the request (`submit_meeting_request`)
+   and then pokes the Apps Script web app with just the request id (action `bishop`, no secret —
+   the page is public). The script, holding the Leaders passphrase, asks the database to *claim*
+   the request (`admin_meeting_request_claim`, `supabase/bishop.sql`): that succeeds once, and
+   only for a real request from the last two days, so a repeated or made-up poke can never send a
+   second text. It then texts the number in the site setting `bishop_notify_phone` (Leaders ›
+   Settings › Bishop meeting requests; blank = off) with the name, phone, email, temple-recommend
+   and note. A failed text releases the claim, and `syncMemberSheets` sweeps every 6 hours for any
+   recent request that was never texted.
 
 ## Security model
 

@@ -207,6 +207,15 @@
         </div>
 
         <div class="card" style="margin-top:16px">
+          <h3 style="margin-top:0">Bishop meeting requests</h3>
+          <p class="muted">Every request from <code>bishop.html</code> is texted to this number the moment it comes in (name, phone, email, temple-recommend, note) — the executive secretary, usually. Leave it blank to stop the texts; the requests still land in the Inbox either way. Needs <code>supabase/bishop.sql</code>.</p>
+          <div class="inline">
+            <div class="field" style="margin:0"><label for="b-phone">Text new requests to</label><input id="b-phone" type="tel" inputmode="tel" placeholder="385-242-5474" style="max-width:200px"></div>
+            <button class="btn small" id="b-save" style="align-self:flex-end">Save</button><span class="muted" id="b-msg"></span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
           <h3 style="margin-top:0">Warning / Magnet messages</h3>
           <p class="muted">What <em>Send the warning / magnet message</em> on a person's slide sends. <code>{first}</code> = first name, <code>{name}</code> = full name. Texts go out through the ward's SimpleTexting number; emails go through the Google account running the script (set up in <code>scripts/announcements.gs</code>) and can show a different <em>from</em> address once that address is added under Gmail → Settings → Accounts and Import → “Send mail as” in that account. Please read these through as a bishopric before the first send.</p>
           <div class="inline">
@@ -815,6 +824,8 @@
         $('w-enforce').checked = (get('roll_enforce_window') || 'true') === 'true';
         showTextListSummary(get('textlist_last_sync'));
         for (const [id, key] of TPL) $(id).value = get(key) || '';
+        $('b-phone').value = (get('bishop_notify_phone') || '').replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
+        $('b-msg').textContent = rows.some(r => r.key === 'bishop_notify_phone') ? '' : 'Run supabase/bishop.sql to switch the texts on.';
         $('n-msg').textContent = rows.some(r => r.key === 'notify_warning_sms') ? '' : 'Run supabase/flags.sql to get the starter messages.';
       }
       const TPL = [['n-from', 'notify_from_name'], ['n-from-email', 'notify_from_email'], ['n-reply', 'notify_reply_to'], ['n-due-warning', 'flag_due_days_warning'], ['n-due-magnet', 'flag_due_days_magnet'], ['n-warning-sms', 'notify_warning_sms'], ['n-warning-subject', 'notify_warning_email_subject'], ['n-warning-email', 'notify_warning_email'], ['n-magnet-sms', 'notify_magnet_sms'], ['n-magnet-subject', 'notify_magnet_email_subject'], ['n-magnet-email', 'notify_magnet_email']];
@@ -844,6 +855,12 @@
           msg.textContent = 'Done.'; showTextListSummary(j);
         } catch (e) { msg.textContent = 'Not synced: ' + e.message; }
         finally { $('tl-sync').disabled = false; }
+      });
+      $('b-save').addEventListener('click', async () => {
+        const digits = $('b-phone').value.replace(/\D/g, '').replace(/^1(\d{10})$/, '$1');
+        if (digits && digits.length !== 10) { $('b-msg').textContent = 'Enter a 10-digit number (or leave it blank).'; return; }
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'bishop_notify_phone', p_value: digits }); $('b-msg').textContent = digits ? 'Saved — new requests go to ' + digits.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') + '.' : 'Saved — texts are off.'; }
+        catch (e) { $('b-msg').textContent = 'Not saved: ' + e.message; }
       });
       $('n-save').addEventListener('click', async () => {
         try {

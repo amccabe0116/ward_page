@@ -72,7 +72,10 @@
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Please enter a valid email address.', $('email'));
         sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
         try {
-          await rpc('submit_meeting_request', { p_name: name, p_phone: phone, p_email: email, p_temple_recommend: $('recommend').checked, p_note: $('note').value });
+          const id = await rpc('submit_meeting_request', { p_name: name, p_phone: phone, p_email: email, p_temple_recommend: $('recommend').checked, p_note: $('note').value });
+          // tell the Google script so the executive secretary gets a text right away (it can only
+          // ever text a real request once, so nothing here needs a secret); a miss is swept up later
+          if (NP.C.sheetsRefreshUrl && id) fetch(NP.C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'bishop', id }) }).catch(() => {});
           $('main').hidden = true;
           const view = el('div', { class: 'success' }, [
             el('div', { class: 'check', html: icons.check }),
