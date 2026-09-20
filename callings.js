@@ -215,6 +215,16 @@ window.NPCallings = (function () {
     } else {
       for (const sr of sheetRows) { const member = idx.findMember(sr.variants); people.push(mk(sr.name, sr, null, member, sr.variants)); }
     }
+    // People who exist only as a pending site edit so far — flagged from Leaders › Members before
+    // the Google Sheet has their row. They show as pending until the sheet copy comes back with them.
+    const have = new Set(people.flatMap(p => [norm(p.sheetName), norm(p.name)]));
+    for (const e of edits) {
+      if (e.deleted || have.has(norm(e.name))) continue;
+      if (e.synced_at && !(new Date(e.updated_at) > sheetAt)) continue;        // synced long ago and gone from the sheet since: not ours to resurrect
+      const variants = splits(e.name);
+      const member = (e.lcr_uuid && members.find(m => m.lcr_uuid === e.lcr_uuid)) || idx.findMember(variants);
+      const p = mk(e.name, null, null, member, variants); p.editOnly = true; people.push(p);
+    }
   }
 
   function status(p) {
@@ -229,9 +239,10 @@ window.NPCallings = (function () {
     all: { label: 'Everyone', test: p => !p.sheetOnly && !p.deleted },
     none: { label: 'Nothing proposed', test: p => !p.sheetOnly && !p.deleted && !truthy(p.proposed) && !truthy(p.assignment) && !p.flag },
     waiting: { label: 'Proposed, waiting', test: p => !p.sheetOnly && !p.deleted && (truthy(p.proposed) || truthy(p.assignment)) && !isTicked(p.sustained) && !/accept/i.test(p.answer) },
-    warning: { label: 'Warning', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Warning' },
-    magnet: { label: 'Magnet', test: p => !p.sheetOnly && !p.deleted && p.flag === 'Magnet' },
-    due: { label: 'Ready to move out', test: p => !p.sheetOnly && !p.deleted && p.due },
+    // flags follow the person, calling or not (someone flagged from Leaders › Members may well have one)
+    warning: { label: 'Warning', test: p => !p.deleted && p.flag === 'Warning' },
+    magnet: { label: 'Magnet', test: p => !p.deleted && p.flag === 'Magnet' },
+    due: { label: 'Ready to move out', test: p => !p.deleted && p.due },
     other: { label: 'Other notes', test: p => !p.sheetOnly && !p.deleted && !p.flag && truthy(p.notes) },
     new: { label: 'New / not on sheet', test: p => !p.sheetOnly && !p.deleted && (p.isNew || !p.onSheet) },
     hasCalling: { label: 'Has a calling?', test: p => !!p.sheetOnly && !!(p.member && p.member.active) },
@@ -752,11 +763,39 @@ window.NPCallings = (function () {
   // for Leaders › Overview: the merged people list + sheet copies, and a way to jump to one person's slide
   function data() { return { people, sheets, loaded }; }
   function openPerson(sheetName) {
-    filter = 'all'; query = ''; if ($('cal-search')) $('cal-search').value = '';
-    applyFilter(); renderList();
-    const at = view.findIndex(x => x.sheetName === sheetName);
-    if (at >= 0) openDeck(at); else toast('Not on the list any more');
+    query = ''; if ($('cal-search')) $('cal-search').value = '';
+    // whichever view has them: the main list, then the has-a-calling / not-in-LCR views, then removed
+    for (const f of ['all', 'hasCalling', 'sheetOnly', 'removed']) {
+      filter = f; applyFilter();
+      const at = view.findIndex(x => x.sheetName === sheetName);
+      if (at >= 0) { renderList(); openDeck(at); return; }
+    }
+    filter = 'all'; applyFilter(); renderList(); toast('Not on the list any more');
   }
+  // ---- flags from Leaders › Members ----
+  // The callings-list entry that is this roster member, if any: by LCR uuid, then by the member link.
+  function personFor(member) {
+    if (!loaded || !member) return null;
+    const hit = p => (p.member && p.member.id === member.id) || (member.lcr_uuid && p.lcr && p.lcr['Person UUID'] === member.lcr_uuid);
+    return people.find(p => hit(p) && !p.deleted) || people.find(hit) || null;
+  }
+  // Set (or clear) a member's Flag straight from the Members list. Someone who isn't on the callings
+  // list gets a row of their own (named "First Last", like the sheet); a removed / left-off person
+  // comes back on the list. Any change clears "Flag sent" — that date belonged to the old flag.
+  async function setFlag(member, flag) {
+    await load();
+    let p = personFor(member);
+    const [last, rest] = String(member.name || '').split(/,\s*/);
+    const sheetName = p ? p.sheetName : ((rest || '').split(' ')[0] + ' ' + (last || '')).trim();
+    if (p && p.deleted && flag) await rpc('admin_callings_delete', { p_pass: ctx.getPass(), p_name: p.sheetName, p_delete: false, p_by: null });
+    await rpc('admin_callings_edit', { p_pass: ctx.getPass(), p_name: sheetName, p_lcr_uuid: member.lcr_uuid || (p && p.lcr && p.lcr['Person UUID']) || null, p_values: { Flag: flag || null, 'Flag sent': null }, p_by: null });
+    edits = await rpc('admin_callings_edits', { p_pass: ctx.getPass() });
+    build(); applyFilter(); renderList();
+    p = people.find(x => x.sheetName === sheetName) || personFor(member);
+    if (p && C.sheetsRefreshUrl) saveToSheet(p, null, true);     // background: into the Google Sheet
+    return p;
+  }
+
   // Settings → "Send me a test text": just the SMS leg, to check the SimpleTexting token
   async function sendTestText(phone, text) {
     if (!C.sheetsRefreshUrl) throw new Error('the Google script web app URL is not set (config.js)');
@@ -765,5 +804,5 @@ window.NPCallings = (function () {
     if (j.sms !== 'sent') throw new Error(j.error || 'text not sent');
     return j;
   }
-  return { init, load, refresh: () => load(true), data, openPerson, isTicked, sendTestText };
+  return { init, load, refresh: () => load(true), data, openPerson, isTicked, sendTestText, personFor, setFlag };
 })();

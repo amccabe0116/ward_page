@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=11">
+  <link rel="stylesheet" href="app.css?v=12">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -266,7 +266,7 @@
 
   <script src="config.js"></script>
   <script src="app.js?v=2"></script>
-  <script src="callings.js?v=22"></script>
+  <script src="callings.js?v=23"></script>
   <script src="posts.js?v=10"></script>
   <script src="overview.js?v=1"></script>
   <script>
@@ -403,12 +403,14 @@
         members = await rpc('admin_members', { p_pass: pass });
         renderMembers();
       }
+      // The Flag column needs the callings data (sheet copy + site edits); it fills in once that has loaded.
+      let flagsReady = false, flagsLoading = false;
       function renderMembers() {
         const q = $('members-search').value.trim().toLowerCase();
         const box = $('members'); box.innerHTML = '';
         const active = members.filter(m => m.active).length;
         $('members-count').textContent = `${active} active · ${members.length - active} inactive`;
-        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, '')])));
+        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Flag'), el('th', {}, '')])));
         const tb = el('tbody');
         for (const m of members) {
           if (q && !m.name.toLowerCase().includes(q)) continue;
@@ -418,10 +420,31 @@
             el('td', {}, m.org || ''),
             el('td', { class: 'muted' }, ss ? ss.orgName : '—'),
             el('td', {}, el('span', { class: 'pill ' + (m.active ? 'ok' : 'off') }, m.active ? 'active' : 'inactive')),
+            el('td', { class: 'flag-cell' }, flagCell(m)),
             el('td', {}, el('button', { class: 'chip', onclick: async () => { await rpc('admin_set_member_active', { p_pass: pass, p_member_id: m.id, p_active: !m.active }); m.active = !m.active; renderMembers(); } }, m.active ? 'Deactivate' : 'Activate')),
           ]));
         }
         t.appendChild(tb); box.appendChild(t);
+        if (!flagsReady && !flagsLoading) { flagsLoading = true; NPCallings.load().then(() => { flagsReady = true; renderMembers(); }).catch(() => {}).finally(() => { flagsLoading = false; }); }
+      }
+      // Warning / Magnet straight from the list: the same Flag column the Callings slide edits
+      // (someone not on the callings list gets a row there; "Send" opens their slide for the message).
+      function flagCell(m) {
+        if (!flagsReady) return el('span', { class: 'muted small' }, '…');
+        const p = NPCallings.personFor(m), flag = p && !p.deleted ? p.flag : '';
+        const sel = el('select', { class: 'flag-select', title: 'Warning = may be sent back if they don’t attend · Magnet = being sent back' }, [el('option', { value: '' }, 'No flag'), el('option', { value: 'Warning' }, 'Warning'), el('option', { value: 'Magnet' }, 'Magnet')]);
+        sel.value = flag;
+        sel.className += flag ? ' ' + flag.toLowerCase() : '';
+        sel.addEventListener('change', async () => {
+          const to = sel.value;
+          if (to && !(await (async () => { const ok = confirm((to === 'Warning' ? 'Flag ' + m.name + ' as Warning (may be sent back to their home ward if they don’t attend)?' : 'Flag ' + m.name + ' as Magnet (being sent back, no new-member meeting)?') + (p && !p.deleted ? '' : '\n\nThey aren’t on the callings list yet — this adds a row for them.')); if (ok) await new Promise(r => setTimeout(r, 150)); return ok; })())) { sel.value = flag; return; }
+          sel.disabled = true;
+          try { await NPCallings.setFlag(m, to); toast(to ? m.name + ' flagged ' + to + ' — writing it to the Google Sheet…' : 'Flag cleared for ' + m.name); renderMembers(); }
+          catch (e) { sel.disabled = false; sel.value = flag; toast('Not saved: ' + (/admin_callings_edit/.test(e.message) ? 'run supabase/edits.sql + flags.sql first' : e.message), 5000); }
+        });
+        const bits = [sel];
+        if (flag) bits.push(el('button', { class: 'chip', type: 'button', title: p.flagSent ? 'Message sent ' + p.flagSent + ' — open their slide' : 'Open their slide in Callings to send the ' + flag.toLowerCase() + ' message', onclick: () => { document.querySelector('.tab[data-pane=callings]').click(); NPCallings.load().then(() => NPCallings.openPerson(p.sheetName)); } }, p.flagSent ? 'Sent ' + p.flagSent.replace(/\s*\(.*$/, '') : 'Send message'));
+        return el('div', { class: 'inline', style: 'gap:6px' }, bits);
       }
       $('members-search').addEventListener('input', renderMembers);
 

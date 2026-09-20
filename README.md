@@ -83,7 +83,11 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    the person through the Apps Script web app with the wording under Leaders › Settings, and
    records the date in the "Flag sent" column (ticking that box in Edit records today's date
    too). After `flag_due_days_warning` / `_magnet` days (Settings; 21 / 7 by default) the person
-   shows as *Ready to move out* so their records can be moved.
+   shows as *Ready to move out* so their records can be moved. The same Flag can be set straight
+   from **Leaders › Members** (a Flag column on every row, with *Send message* jumping to the
+   person's slide): someone who isn't on the callings list gets a row of their own (shown under
+   *Has a calling?* / *Not in LCR* until LCR lists them), and any change clears *Flag sent*. The
+   Warning / Magnet / Ready-to-move-out views include everyone flagged, calling or not.
 
 5. **Leaders › Overview** is the landing page: active members and men/women split from the
    roster, who moved in during the last 30 days (LCR's *Members Moved In* report, copied in as

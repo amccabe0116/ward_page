@@ -278,6 +278,9 @@ table.grid th { color: var(--muted); font-weight: 600; font-size: 12px; text-tra
 .pill.warn { background: #fdf3df; color: var(--warn); }
 .pill.wait { background: #e6f0fa; color: #1d4e89; }
 .pill.flag { background: #fde8e8; color: var(--danger); }
+.flag-select { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); }
+.flag-select.warning { background: #fde8e8; color: var(--danger); border-color: #f3c2c2; font-weight: 600; }
+.flag-select.magnet { background: #ede7f6; color: #4a2d8a; border-color: #d6c9ee; font-weight: 600; }
 .pill.new { background: #f2ecdd; color: #6b4e0b; }
 .pill.magnet { background: #ede7f6; color: #4a2d8a; }
 .pill.due { background: var(--danger); color: #fff; }
