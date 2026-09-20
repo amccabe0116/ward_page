@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dinner with the missionaries · North Point YSA</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=13">
+</head>
+<body>
+  <!-- Sign up to take the missionaries to dinner. Leaders pair each person with someone of the
+       other gender close in age; the two of them plan the meal out with the missionaries. The whole
+       thing switches on and off from Leaders › Dinners (setting dinner_enabled). -->
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">North Point YSA</p>
+    <h1>Dinner with the missionaries</h1>
+    <p class="date">Sign up, get paired with someone, take the missionaries out to eat.</p>
+  </header>
+
+  <main class="wrap" id="main" hidden>
+    <p class="lede">Here’s how it works: sign up below, and we’ll pair you with someone in the ward — a random match, close to your age. The two of you pick a night, and take the missionaries out for a meal. Good food, a new friend, and the missionaries fed. Everybody wins.</p>
+
+    <div class="private">
+      <span class="ic" id="share-icon"></span>
+      <span><b>What gets shared.</b> Your match gets your first name and phone number so you can plan the night; the missionaries get your names. Nothing else goes anywhere.</span>
+    </div>
+
+    <div class="field">
+      <label for="name">Your name</label>
+      <input id="name" type="text" maxlength="80" autocomplete="name" required>
+    </div>
+    <div class="inline wrap2">
+      <div class="field">
+        <label for="gender">I’m a</label>
+        <select id="gender"><option value="">Choose…</option><option value="M">Man</option><option value="F">Woman</option></select>
+      </div>
+      <div class="field">
+        <label for="age">Age</label>
+        <input id="age" type="number" min="18" max="45" inputmode="numeric" style="max-width:120px">
+      </div>
+    </div>
+    <div class="field">
+      <label for="phone">Mobile number <span class="opt">(your match texts you here)</span></label>
+      <input id="phone" type="tel" maxlength="40" autocomplete="tel" inputmode="tel" required>
+    </div>
+    <div class="field">
+      <label for="email">Email <span class="opt">(optional)</span></label>
+      <input id="email" type="email" maxlength="120" autocomplete="email" inputmode="email">
+    </div>
+    <div class="field">
+      <label for="availability">Best nights for dinner <span class="opt">(optional)</span></label>
+      <input id="availability" type="text" maxlength="300" placeholder="Weeknights after 7, most Saturdays…">
+    </div>
+    <div class="field">
+      <label for="notes">Anything your match or the missionaries should know? <span class="opt">(optional)</span></label>
+      <textarea id="notes" rows="3" maxlength="600" placeholder="Happy to drive, know a great taco place, no seafood please…"></textarea>
+    </div>
+    <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true"><input id="website" type="text" tabindex="-1" autocomplete="off" placeholder="Leave this empty"></div>
+
+    <div class="notice error" id="error" hidden></div>
+    <div class="actionbar">
+      <button class="btn" id="send">Sign me up</button>
+    </div>
+  </main>
+
+  <main class="wrap" id="closed" hidden>
+    <div class="card" style="text-align:center;padding:28px 20px">
+      <h2 style="margin:0 0 8px">Sign-ups are closed right now</h2>
+      <p class="muted" style="margin:0 0 16px">The missionary dinners aren’t running at the moment — watch the announcements for the next round.</p>
+      <a class="btn secondary" href="index.html" style="text-decoration:none">Back to the home page</a>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js?v=2"></script>
+  <script>
+    (function () {
+      const { rpc, el, icons } = NP;
+      const $ = id => document.getElementById(id);
+      $('share-icon').innerHTML = icons.lock;
+      const sendBtn = $('send'), errEl = $('error');
+      function fail(msg, focusEl) { errEl.textContent = msg; errEl.hidden = false; if (focusEl) focusEl.focus(); errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      // the switch: Leaders › Dinners
+      rpc('dinner_status').then(s => { if (s && s.enabled) $('main').hidden = false; else $('closed').hidden = false; })
+        .catch(() => { $('closed').hidden = false; });
+
+      sendBtn.addEventListener('click', async () => {
+        errEl.hidden = true;
+        const name = $('name').value.trim(), gender = $('gender').value, age = Number($('age').value), phone = $('phone').value.trim(), email = $('email').value.trim();
+        if (name.length < 2) return fail('Please enter your name.', $('name'));
+        if (!gender) return fail('Please pick man or woman — that’s how the pairing works.', $('gender'));
+        if (!age || age < 18 || age > 45) return fail('Please enter your age.', $('age'));
+        if (phone.replace(/\D/g, '').length < 10) return fail('Please enter a mobile number your match can text.', $('phone'));
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('That email doesn’t look right (it’s optional — you can leave it blank).', $('email'));
+        sendBtn.disabled = true; sendBtn.textContent = 'Signing up…';
+        try {
+          await rpc('dinner_signup', { p_name: name, p_gender: gender, p_age: age, p_phone: phone, p_email: email || null, p_availability: $('availability').value.trim() || null, p_notes: $('notes').value.trim() || null, p_website: $('website').value });
+          $('main').hidden = true;
+          const view = el('div', { class: 'success' }, [
+            el('div', { class: 'check', html: icons.check }),
+            el('h2', {}, 'You’re in'),
+            el('p', {}, 'Thanks, ' + name.split(' ')[0] + '. Once you’re paired you’ll get a text with your match’s name and number — then pick a night and take the missionaries out.'),
+            el('a', { class: 'btn', href: 'index.html', style: 'text-decoration:none' }, 'Back to home'),
+          ]);
+          document.body.appendChild(view); window.scrollTo(0, 0);
+        } catch (e) {
+          sendBtn.disabled = false; sendBtn.textContent = 'Sign me up';
+          if (/closed right now/.test(e.message)) { $('main').hidden = true; $('closed').hidden = false; return; }
+          fail(/dinner_signup/.test(e.message) ? 'Sign-ups aren’t switched on yet (the leaders need to run supabase/dinner.sql).' : e.message);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

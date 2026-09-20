@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=12">
+  <link rel="stylesheet" href="app.css?v=13">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -42,6 +42,7 @@
         <button class="tab" data-pane="announcements">Announcements<span class="badge" id="posts-badge" hidden></span></button>
         <button class="tab" data-pane="callings">Callings</button>
         <button class="tab" data-pane="members">Members</button>
+        <button class="tab" data-pane="dinners">Dinners<span class="badge" id="dinner-badge" hidden></span></button>
         <button class="tab" data-pane="sync">LCR</button>
         <button class="tab" data-pane="settings">Settings</button>
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
@@ -172,6 +173,27 @@
       </section>
 
       <!-- LCR sync -->
+      <!-- Dinner with the missionaries: sign-ups → pairs (supabase/dinner.sql) -->
+      <section class="pane" id="pane-dinners">
+        <div class="card" style="margin-bottom:14px">
+          <div class="inline" style="justify-content:space-between">
+            <label class="switch"><input type="checkbox" id="dn-enabled"><span class="knob"></span><b id="dn-enabled-label">Sign-ups are off</b></label>
+            <span class="muted" id="dn-switch-msg"></span>
+          </div>
+          <p class="muted" style="margin:8px 0 0">The switch for the whole thing. On: <code>dinner.html</code> takes sign-ups and the home page shows the card. Off: the page says sign-ups are closed, the card disappears, and nothing here changes — pairs already in motion carry on.</p>
+          <details style="margin-top:10px">
+            <summary class="muted">Pairing settings and the intro text</summary>
+            <div class="inline" style="margin-top:8px">
+              <div class="field" style="margin:0"><label for="dn-gap">Age gap for a match <span class="opt">(years, either way)</span></label><input id="dn-gap" type="number" min="0" max="15" style="max-width:110px"></div>
+              <div class="field" style="margin:0;flex:1"><label for="dn-missionaries">Missionaries’ contact <span class="opt">(goes into the intro text)</span></label><input id="dn-missionaries" type="text" maxlength="200" placeholder="Elders 470-555-0123 · Sisters 470-555-0124"></div>
+            </div>
+            <div class="field"><label for="dn-sms">Intro text to each person once paired <span class="opt">{first} = their first name · {other} = their match · {other_phone} · {missionaries}</span></label><textarea id="dn-sms" rows="3"></textarea></div>
+            <div class="inline"><button class="btn small" id="dn-save">Save settings</button><span class="muted" id="dn-save-msg"></span></div>
+          </details>
+        </div>
+        <div id="dinners"><p class="muted">Loading…</p></div>
+      </section>
+
       <section class="pane" id="pane-sync">
         <div class="card">
           <h3 style="margin-top:0">How the LCR sync works</h3>
@@ -407,6 +429,185 @@
         try { await navigator.clipboard.writeText(lines.join('\n')); toast('Summary copied'); } catch (e) { prompt('Copy:', lines.join('\n')); }
       });
 
+      // ---- Dinner with the missionaries (supabase/dinner.sql) ----
+      // Sign-ups wait; a leader pairs each with a random person of the other gender within the age gap
+      // (or picks someone), sends both the intro text, then marks the pair scheduled / done. Cancel puts
+      // both back in the pool. The switch at the top is the setting dinner_enabled.
+      let dnSignups = [], dnPairs = [], dnSettings = {}, dnProposal = null, dnShowClosed = false;
+      const GENDER = { M: 'Man', F: 'Woman' };
+      const firstName = n => String(n || '').trim().split(/\s+/)[0];
+      const shortName = n => { const t = String(n || '').trim().split(/\s+/); return t.length > 1 ? t[0] + ' ' + t[t.length - 1][0] + '.' : t[0] || ''; };
+      const fmtPhone = ph => String(ph || '').replace(/\D/g, '').replace(/^1(\d{10})$/, '$1').replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') || ph;
+      const daysAgo = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
+      async function loadDinners() {
+        const box = $('dinners');
+        try {
+          const rows = await rpc('admin_get_settings', { p_pass: pass }); dnSettings = Object.fromEntries(rows.map(r => [r.key, r.value]));
+          [dnSignups, dnPairs] = await Promise.all([rpc('admin_dinner_signups', { p_pass: pass, p_include_done: dnShowClosed }), rpc('admin_dinner_pairs', { p_pass: pass, p_include_closed: dnShowClosed })]);
+        } catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_dinner/.test(e.message) ? 'Run supabase/dinner.sql in Supabase to switch this tool on.' : 'Could not load: ' + e.message)); return; }
+        const on = dnSettings.dinner_enabled === 'true';
+        $('dn-enabled').checked = on; $('dn-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off';
+        if (document.activeElement !== $('dn-gap')) $('dn-gap').value = dnSettings.dinner_age_gap || '3';
+        if (document.activeElement !== $('dn-missionaries')) $('dn-missionaries').value = dnSettings.dinner_missionary_contact || '';
+        if (document.activeElement !== $('dn-sms')) $('dn-sms').value = dnSettings.dinner_intro_sms || '';
+        renderDinners();
+      }
+      const dnGap = () => { const g = parseInt(dnSettings.dinner_age_gap, 10); return isNaN(g) ? 3 : g; };
+      const dnById = id => dnSignups.find(s => s.id === id);
+      const pairedBefore = (a, b) => dnPairs.some(p => (p.a_id === a.id && p.b_id === b.id) || (p.a_id === b.id && p.b_id === a.id));
+      // who could be paired with s: other gender, waiting, within the gap (then within twice the gap, marked "stretch"), not paired with them before
+      function candidatesFor(s) {
+        const pool = dnSignups.filter(o => o.id !== s.id && o.status === 'waiting' && o.gender !== s.gender && !pairedBefore(s, o));
+        const near = pool.filter(o => Math.abs(o.age - s.age) <= dnGap());
+        if (near.length) return { list: near, stretch: false };
+        return { list: pool.filter(o => Math.abs(o.age - s.age) <= dnGap() * 2), stretch: true };
+      }
+      const pick = list => list[Math.floor(Math.random() * list.length)];
+      function personLine(s, opts) {
+        opts = opts || {};
+        return el('div', {}, [
+          el('div', { class: 'dn-name' }, [s.name, el('span', { class: 'pill ' + (s.gender === 'M' ? 'gender-m' : 'gender-f') }, GENDER[s.gender] + ' · ' + s.age)]),
+          el('div', { class: 'dn-meta' }, [fmtPhone(s.phone), s.email ? ' · ' + s.email : '', s.availability ? ' · ' + s.availability : ''].join('')),
+          s.notes && !opts.brief ? el('div', { class: 'dn-meta' }, '“' + s.notes + '”') : null,
+        ]);
+      }
+      function renderDinners() {
+        const box = $('dinners'); box.innerHTML = '';
+        const waiting = dnSignups.filter(s => s.status === 'waiting');
+        const open = dnPairs.filter(p => ['proposed', 'notified', 'scheduled'].includes(p.status));
+        const closed = dnPairs.filter(p => !['proposed', 'notified', 'scheduled'].includes(p.status));
+        const others = dnSignups.filter(s => s.status === 'done' || s.status === 'withdrawn');
+        $('dinner-badge').textContent = waiting.length; $('dinner-badge').hidden = !waiting.length;
+        const section = (title, n, cls) => box.appendChild(el('h3', { class: 'post-queue-title' }, [title, el('span', { class: 'pill ' + (cls || 'off') }, String(n))]));
+
+        // 1. waiting
+        section('Waiting to be paired', waiting.length, waiting.length ? 'wait' : 'off');
+        const men = waiting.filter(s => s.gender === 'M').length, women = waiting.length - men;
+        box.appendChild(el('p', { class: 'muted small', style: 'margin:0 0 10px' }, waiting.length ? `${men} ${men === 1 ? 'man' : 'men'} · ${women} ${women === 1 ? 'woman' : 'women'} · a match is someone of the other gender within ${dnGap()} years` + (waiting.length > 1 ? '' : '') : 'Nobody waiting.' + (dnSettings.dinner_enabled === 'true' ? ' Sign-ups are open at dinner.html.' : ' Flip the switch above to open sign-ups.')));
+        if (waiting.length >= 2 && waiting.some(s => candidatesFor(s).list.length)) box.appendChild(el('div', { class: 'inline', style: 'margin:0 0 10px' }, [el('button', { class: 'btn small', type: 'button', onclick: autoPairAll }, 'Pair everyone I can'), el('span', { class: 'muted small' }, 'random matches within the age gap — you still send the texts')]));
+        const grid = el('div', { class: 'dn-grid' });
+        for (const s of waiting) {
+          const c = candidatesFor(s);
+          const card = el('div', { class: 'dn-card' + (daysAgo(s.created_at) > 21 ? ' waiting-long' : ''), 'data-id': s.id }, [
+            personLine(s),
+            el('div', { class: 'dn-meta' }, 'Signed up ' + whenShort(s.created_at) + (s.times_paired ? ' · paired ' + s.times_paired + 'x before' : '') + (daysAgo(s.created_at) > 21 ? ' · waiting a while' : '')),
+            dnProposal && dnProposal.for === s.id ? proposalBox(s) : el('div', { class: 'dn-actions' }, [
+              c.list.length ? el('button', { class: 'chip ok', type: 'button', onclick: () => propose(s) }, 'Pair') : el('span', { class: 'muted small' }, 'No match yet — nobody of the other gender close in age is waiting'),
+              el('button', { class: 'chip', type: 'button', onclick: () => setSignup(s, 'withdrawn') }, 'Withdraw'),
+              el('button', { class: 'chip danger', type: 'button', onclick: () => deleteSignup(s) }, 'Delete'),
+            ]),
+          ]);
+          grid.appendChild(card);
+        }
+        if (waiting.length) box.appendChild(grid);
+
+        // 2. pairs in motion
+        section('Pairs', open.length, open.length ? 'ok' : 'off');
+        if (!open.length) box.appendChild(el('p', { class: 'muted' }, 'No pairs yet.'));
+        else box.appendChild(el('div', { class: 'dn-grid' }, open.map(pairCard)));
+
+        // 3. history
+        const hist = el('details', { style: 'margin-top:14px' }, [el('summary', { class: 'muted' }, 'Finished, cancelled and withdrawn' + (dnShowClosed ? '' : ' (last 60 days)') + ' · ' + (closed.length + others.length))]);
+        const hb = el('div', { style: 'margin-top:8px;display:grid;gap:8px' });
+        closed.forEach(p => hb.appendChild(pairCard(p)));
+        others.forEach(s => hb.appendChild(el('div', { class: 'dn-card' }, [personLine(s, { brief: true }), el('div', { class: 'dn-meta' }, s.status + ' · ' + whenShort(s.updated_at)), el('div', { class: 'dn-actions' }, [el('button', { class: 'chip', type: 'button', onclick: () => setSignup(s, 'waiting') }, 'Back in the pool'), el('button', { class: 'chip danger', type: 'button', onclick: () => deleteSignup(s) }, 'Delete')])])));
+        if (!dnShowClosed) hb.appendChild(el('button', { class: 'chip', type: 'button', onclick: () => { dnShowClosed = true; loadDinners(); } }, 'Show everything'));
+        hist.appendChild(hb); box.appendChild(hist);
+      }
+      function proposalBox(s) {
+        const o = dnById(dnProposal.with);
+        const c = candidatesFor(s);
+        const sel = el('select', {}, c.list.map(x => el('option', { value: x.id, selected: x.id === o.id ? '' : null }, x.name + ' · ' + x.age + (Math.abs(x.age - s.age) > dnGap() ? ' (stretch)' : ''))));
+        sel.addEventListener('change', () => { dnProposal.with = Number(sel.value); renderDinners(); });
+        return el('div', { class: 'dn-propose' }, [
+          el('div', {}, [el('b', {}, 'Match: '), o.name + ' — ' + GENDER[o.gender] + ', ' + o.age + (o.availability ? ' · ' + o.availability : '') + (dnProposal.stretch ? ' · a bit outside the usual age gap' : '')]),
+          el('div', { class: 'inline' }, [
+            el('button', { class: 'btn small', type: 'button', onclick: () => confirmPair(s, o) }, 'Pair them'),
+            c.list.length > 1 ? el('button', { class: 'chip', type: 'button', onclick: () => { const rest = c.list.filter(x => x.id !== o.id); dnProposal.with = pick(rest).id; renderDinners(); } }, 'Try another') : null,
+            c.list.length > 1 ? sel : null,
+            el('button', { class: 'chip', type: 'button', onclick: () => { dnProposal = null; renderDinners(); } }, 'Cancel'),
+          ]),
+        ]);
+      }
+      function propose(s) { const c = candidatesFor(s); if (!c.list.length) return; dnProposal = { for: s.id, with: pick(c.list).id, stretch: c.stretch }; renderDinners(); }
+      async function confirmPair(a, b) {
+        try { await rpc('admin_dinner_pair', { p_pass: pass, p_a: a.id, p_b: b.id, p_by: null }); dnProposal = null; toast(firstName(a.name) + ' & ' + firstName(b.name) + ' paired — now send them the texts'); await loadDinners(); }
+        catch (e) { toast('Not paired: ' + e.message, 5000); }
+      }
+      async function autoPairAll() {
+        const waiting = () => dnSignups.filter(s => s.status === 'waiting');
+        let made = 0;
+        // shuffle, pair each still-waiting person with a random candidate, prefer real matches over stretches
+        const order = waiting().sort(() => Math.random() - 0.5);
+        for (const s of order) {
+          if (dnById(s.id).status !== 'waiting') continue;
+          const c = candidatesFor(dnById(s.id)); if (!c.list.length || c.stretch) continue;
+          const o = pick(c.list);
+          try { await rpc('admin_dinner_pair', { p_pass: pass, p_a: s.id, p_b: o.id, p_by: null }); dnById(s.id).status = 'paired'; dnById(o.id).status = 'paired'; dnPairs.push({ a_id: s.id, b_id: o.id, status: 'proposed' }); made++; } catch (e) { toast('Could not pair ' + s.name + ': ' + e.message, 4000); }
+        }
+        toast(made ? made + ' pair' + (made === 1 ? '' : 's') + ' made — send each pair their texts' : 'No new pairs possible'); await loadDinners();
+      }
+      function pairCard(p) {
+        const a = dnById(p.a_id), b = dnById(p.b_id);
+        if (!a || !b) return el('div', { class: 'dn-card' }, el('div', { class: 'dn-meta' }, 'Pair #' + p.id + ' · ' + p.status + ' (a sign-up was deleted)'));
+        const openP = ['proposed', 'notified', 'scheduled'].includes(p.status);
+        const status = { proposed: 'Paired — texts not sent yet', notified: 'Texts sent ' + (p.notified_at ? whenShort(p.notified_at) : ''), scheduled: 'Dinner ' + (p.meal_date ? new Date(p.meal_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'scheduled'), done: 'Done' + (p.meal_date ? ' · ' + p.meal_date : ''), cancelled: 'Cancelled' }[p.status];
+        const st = (to, extra) => async () => { try { await rpc('admin_dinner_pair_status', Object.assign({ p_pass: pass, p_id: p.id, p_status: to }, extra || {})); await loadDinners(); } catch (e) { toast('Failed: ' + e.message, 4000); } };
+        const actions = !openP ? [] : [
+          p.status === 'proposed' ? el('button', { class: 'btn small', type: 'button', onclick: e => sendIntro(p, a, b, e.currentTarget) }, 'Send both the intro text') : el('button', { class: 'chip', type: 'button', onclick: e => sendIntro(p, a, b, e.currentTarget) }, 'Send the texts again'),
+          p.status !== 'scheduled' ? el('button', { class: 'chip', type: 'button', onclick: () => { const d = prompt('Dinner date (YYYY-MM-DD)?', p.meal_date || ''); if (d === null) return; if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('Use YYYY-MM-DD'); return; } st('scheduled', { p_meal_date: d })(); } }, 'Scheduled…') : null,
+          el('button', { class: 'chip ok', type: 'button', onclick: st('done') }, 'Done'),
+          el('button', { class: 'chip danger', type: 'button', onclick: () => { if (confirm('Cancel this pair? Both go back to waiting.')) st('cancelled')(); } }, 'Cancel pair'),
+        ];
+        return el('div', { class: 'dn-card ' + p.status }, [
+          el('div', { class: 'dn-pair' }, [personLine(a, { brief: !openP }), el('div', { class: 'amp' }, '&'), personLine(b, { brief: !openP })]),
+          el('div', { class: 'dn-meta' }, status + ' · paired ' + whenShort(p.created_at) + (p.notes ? ' · ' + p.notes : '')),
+          actions.length ? el('div', { class: 'dn-actions' }, actions) : null,
+        ]);
+      }
+      // The intro text to each of them, through the single-number path the other texts use.
+      function introText(me, other) {
+        const t = dnSettings.dinner_intro_sms || 'Hi {first}! You\'re taking the missionaries to dinner with {other} — text them at {other_phone} to pick a night, then set it up with the missionaries ({missionaries}). Thanks for signing up! — North Point YSA';
+        return t.replace(/\{first\}/g, firstName(me.name)).replace(/\{other\}/g, shortName(other.name)).replace(/\{other_phone\}/g, fmtPhone(other.phone)).replace(/\{missionaries\}/g, dnSettings.dinner_missionary_contact || 'ask the ward mission leader for their number');
+      }
+      async function sendIntro(p, a, b, btn) {
+        if (!C.sheetsRefreshUrl) { toast('Texting needs the Google script web app (config.js)', 4000); return; }
+        const ta = introText(a, b), tb = introText(b, a);
+        if (!confirm('Send these two texts?\n\nTo ' + a.name + ' (' + fmtPhone(a.phone) + '):\n' + ta + '\n\nTo ' + b.name + ' (' + fmtPhone(b.phone) + '):\n' + tb)) return;
+        btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending…';
+        const send = (who, text) => fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: who.name, phone: who.phone, email: '', flag: 'dinner', sms: text }) }).then(x => x.json());
+        try {
+          const [ra, rb] = await Promise.all([send(a, ta), send(b, tb)]);
+          const bad = [ra.sms !== 'sent' ? a.name + ' (' + (ra.error || ra.sms) + ')' : '', rb.sms !== 'sent' ? b.name + ' (' + (rb.error || rb.sms) + ')' : ''].filter(Boolean);
+          if (bad.length === 2) throw new Error(bad.join(', '));
+          await rpc('admin_dinner_pair_status', { p_pass: pass, p_id: p.id, p_status: 'notified' });
+          toast(bad.length ? 'Sent to one — not to ' + bad[0] : 'Both texts sent', 5000); await loadDinners();
+        } catch (e) { btn.disabled = false; btn.textContent = label; toast('Not sent: ' + e.message, 6000); }
+      }
+      async function setSignup(s, status) {
+        try { await rpc('admin_dinner_signup_status', { p_pass: pass, p_id: s.id, p_status: status }); await loadDinners(); } catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      async function deleteSignup(s) {
+        if (!confirm('Delete ' + s.name + '’s sign-up for good?')) return;
+        try { await rpc('admin_dinner_signup_delete', { p_pass: pass, p_id: s.id }); await loadDinners(); } catch (e) { toast('Failed: ' + e.message, 4000); }
+      }
+      $('dn-enabled').addEventListener('change', async () => {
+        const on = $('dn-enabled').checked; $('dn-switch-msg').textContent = 'Saving…';
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_enabled', p_value: on ? 'true' : 'false' }); dnSettings.dinner_enabled = on ? 'true' : 'false'; $('dn-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off'; $('dn-switch-msg').textContent = on ? 'On — dinner.html is taking sign-ups and the home page shows the card.' : 'Off — the page says sign-ups are closed.'; renderDinners(); }
+        catch (e) { $('dn-enabled').checked = !on; $('dn-switch-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      $('dn-save').addEventListener('click', async () => {
+        const gap = parseInt($('dn-gap').value, 10);
+        if (isNaN(gap) || gap < 0 || gap > 15) { $('dn-save-msg').textContent = 'Age gap: 0–15 years.'; return; }
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_age_gap', p_value: String(gap) });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_missionary_contact', p_value: $('dn-missionaries').value.trim() });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_intro_sms', p_value: $('dn-sms').value.trim() });
+          $('dn-save-msg').textContent = 'Saved.'; await loadDinners();
+        } catch (e) { $('dn-save-msg').textContent = 'Not saved: ' + e.message; }
+      });
+      document.querySelector('.tab[data-pane=dinners]').addEventListener('click', loadDinners);
+
       // ---- members ----
       async function loadMembers() {
         members = await rpc('admin_members', { p_pass: pass });
@@ -462,6 +663,7 @@
       async function loadNotesCount() {
         try { const n = await rpc('admin_notes_count', { p_pass: pass }); $('notes-badge').textContent = n; $('notes-badge').hidden = !n; } catch (e) {}
         try { const n = await rpc('admin_posts_pending_count', { p_pass: pass }); $('posts-badge').textContent = n; $('posts-badge').hidden = !n; } catch (e) {}
+        try { const n = await rpc('admin_dinner_waiting_count', { p_pass: pass }); $('dinner-badge').textContent = n; $('dinner-badge').hidden = !n; } catch (e) {}
       }
       async function loadNotes() {
         const box = $('notes'); box.innerHTML = '';

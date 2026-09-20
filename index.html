@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=12">
+  <link rel="stylesheet" href="app.css?v=13">
 </head>
 <body>
   <header class="hero">
@@ -64,6 +64,11 @@
             <span><span class="label">Meet with the Bishop</span><span class="sub">Interviews, temple recommends, or just to talk</span></span>
             <span class="chev" id="chev-bishop"></span>
           </a>
+          <a class="help-link dinner" href="dinner.html" id="dinner-link" hidden>
+            <span class="icon" id="icon-dinner"></span>
+            <span><span class="label">Dinner with the missionaries</span><span class="sub">Get paired with someone, take the missionaries out to eat</span></span>
+            <span class="chev" id="chev-dinner"></span>
+          </a>
         </nav>
       </div>
     </section>
@@ -100,6 +105,10 @@
       document.getElementById('chev-jobs').innerHTML = icons.chevron;
       document.getElementById('icon-bishop').innerHTML = icons.handshake;
       document.getElementById('chev-bishop').innerHTML = icons.chevron;
+      document.getElementById('icon-dinner').innerHTML = icons.dinner;
+      document.getElementById('chev-dinner').innerHTML = icons.chevron;
+      // the missionary-dinner sign-up shows only while leaders have it switched on
+      NP.rpc('dinner_status').then(s => { if (s && s.enabled) document.getElementById('dinner-link').hidden = false; }).catch(() => {});
 
       const links = document.getElementById('links');
       const L = NP.C.links || {};

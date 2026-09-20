@@ -13,6 +13,7 @@ posts.js            posts shared code: the card, the home-page list, the add/edi
 roll.html           ?class=sunday_school | priesthood_rs — tap your name, check in
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
+dinner.html         dinner with the missionaries: sign up, get paired with someone of the other gender close in age
 terms.html          Text-list Terms of Service (required by SimpleTexting) — not linked from the site
 privacy.html        Text-list Privacy Policy (required by SimpleTexting) — not linked from the site
 keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
@@ -40,6 +41,7 @@ supabase/addrow.sql               Add to sheet: lets the site pre-fill the calli
 supabase/posts.sql                posts (events / notices with flyers), public submission, approval, the "flyers" storage bucket
 supabase/repeat.sql               repeating posts (weekly / every 2 weeks / monthly), cancelling one date
 supabase/bishop.sql               Bishop meeting requests texted to the executive secretary (claim-once + the number setting)
+supabase/dinner.sql               dinner with the missionaries: sign-ups, pairs, the on/off switch (dinner_enabled)
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -184,6 +186,19 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    Settings › Bishop meeting requests; blank = off) with the name, phone, email, temple-recommend
    and note. A failed text releases the claim, and `syncMemberSheets` sweeps every 6 hours for any
    recent request that was never texted.
+
+10. **Dinner with the missionaries** (`supabase/dinner.sql`). A get-to-know-you: people sign up on
+    `dinner.html` (name, man/woman, age, mobile, best nights, notes); a leader pairs each with a
+    random person of the other gender within the age gap (Leaders › Dinners — *Pair* proposes one,
+    *Try another* / a pick list override it, *Pair everyone I can* does the whole pool); *Send both
+    the intro text* texts each of them the other's first name and number plus the missionaries'
+    contact (setting `dinner_intro_sms`, single-number path through the Apps Script); then the
+    pair is marked scheduled (with a date) and done, or cancelled (both back in the pool). The
+    **switch** at the top of the tab is the setting `dinner_enabled`: off, `dinner.html` says
+    sign-ups are closed, `dinner_signup()` refuses, and the home-page card disappears — pairs in
+    motion are untouched. A number that signs up again while waiting/paired updates its row rather
+    than adding one; `times_paired` and "waiting a while" (3 weeks) help spread the turns; the
+    tab badge counts people waiting.
 
 ## Security model
 
