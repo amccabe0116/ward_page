@@ -9,7 +9,7 @@ X-PUBLISHED-TTL:PT1H
 REFRESH-INTERVAL;VALUE=DURATION:PT1H
 BEGIN:VEVENT
 UID:post-14@northpointysa.com
-DTSTAMP:20260920T025600Z
+DTSTAMP:20260926T031517Z
 DTSTART:20261025T230000Z
 DTEND:20261026T000000Z
 RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261116T045900Z
@@ -25,11 +25,13 @@ DESCRIPTION:Rehearsals: Four 1-hour practices on Sunday evenings—October
  prelude\, postlude\, or special numbers\, we would love to have your ta
  lents.\n\nPlease take a moment to register at the link below so Camiah 
  and the music committee can prepare adequate sheet music and seating:\n
- Sign up / details: https://forms.gle/Ht1tdQE3R5khzroC9\nEverything\, al
- ways up to date: https://northpointysa.com
+ Sign up / details: https://forms.gle/Ht1tdQE3R5khzroC9\nFlyer: https://
+ utkbhlyvmfbtjyfqeoze.supabase.co/storage/v1/object/public/flyers/upload
+ s/aae7b291-65df-4ca2-861b-d71580f003ad.jpg\nEverything\, always up to d
+ ate: https://northpointysa.com
 URL:https://forms.gle/Ht1tdQE3R5khzroC9
 CREATED:20260920T025122Z
-LAST-MODIFIED:20260920T025600Z
-SEQUENCE:4
+LAST-MODIFIED:20260926T031517Z
+SEQUENCE:8663
 END:VEVENT
 END:VCALENDAR
