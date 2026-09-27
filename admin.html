@@ -301,7 +301,7 @@
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=23"></script>
   <script src="posts.js?v=12"></script>
-  <script src="pipeline.js?v=5"></script>
+  <script src="pipeline.js?v=6"></script>
   <script src="overview.js?v=2"></script>
   <script>
     (function () {
@@ -634,6 +634,13 @@
         }
         const shown = members.filter(m => (!q || m.name.toLowerCase().includes(q)) && (!flagsReady || group[2](m, stageOf.get(m.id))));
         $('members-count').textContent = `${active} active · ${members.length - active} inactive` + (memberFilter !== 'all' || q ? ` · showing ${shown.length}` : '');
+        // copy what's showing as "name — calling — who contacts", one per line (everyone with something in progress)
+        const lines = flagsReady ? NPPipeline.copyLines(shown, stageOf) : [];
+        if (lines.length) chips.appendChild(el('button', { class: 'chip copy-list', type: 'button', title: 'Copy these as one line per person: name — calling — who contacts', onclick: async e => {
+          const text = lines.join('\n');
+          try { await navigator.clipboard.writeText(text); toast(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}`); }
+          catch (err) { window.prompt('Copy this list', text); }
+        } }, `Copy list · ${lines.length}`));
         // active / inactive comes from the weekly LCR sync (the roster refresh deactivates anyone LCR no longer lists) — no hand switch here
         const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Calling in progress'), el('th', {}, 'Flag')])));
         const tb = el('tbody');

@@ -92,10 +92,15 @@ window.NPPipeline = (function () {
   // { key, label, src: 'site' | 'sheet' } or null when nothing is in progress.
   function stageFor(m) {
     const r = openFor(m);
-    if (r) return Object.assign({ src: 'site' }, stage(r));
+    if (r) return Object.assign({ src: 'site', calling: r.calling, contact: r.contact || '' }, stage(r));
     const s = NPCallings.personFor ? sheetState(NPCallings.personFor(m)) : null;
-    if (s) return Object.assign({ src: 'sheet' }, stage(s));
+    if (s) return Object.assign({ src: 'sheet', calling: s.calling, contact: s.contact || '' }, stage(s));
     return null;
+  }
+  // One line per person for pasting into a text or meeting notes: "First Last — calling — who contacts".
+  function copyLines(members, stageOf) {
+    return members.map(m => [m, stageOf.get(m.id)]).filter(([, st]) => st)
+      .map(([m, st]) => `${m.display_name || firstLast(m.name)} — ${st.calling} — ${st.contact || 'nobody assigned'}`);
   }
   // The chips, in process order. `test` gets the member and their stage (or null).
   const GROUPS = [
@@ -203,5 +208,5 @@ window.NPPipeline = (function () {
 
   function init(c) { ctx = c; }
   function data() { return { rows, loaded, unavailable }; }
-  return { init, load, refresh: () => load(true), data, stage, sheetState, stageFor, GROUPS, openFor, historyFor, rowForPerson, cell, editor, save, step, remove, trackSheet, lists, fmtDay };
+  return { init, load, refresh: () => load(true), data, stage, sheetState, stageFor, GROUPS, copyLines, openFor, historyFor, rowForPerson, cell, editor, save, step, remove, trackSheet, lists, fmtDay };
 })();
