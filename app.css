@@ -449,6 +449,12 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 /* ---- Announcements as posts (posts.js) ---- */
 .chip.add-post { text-decoration: none; font-weight: 600; background: var(--navy); color: #fff; border-color: var(--navy); white-space: nowrap; }
 .post-list { display: grid; gap: 14px; }
+/* how far ahead the home page shows */
+.post-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 0 0 14px; }
+.post-filter .lbl { font-size: 13px; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.post-filter .chip { font-size: 13px; padding: 4px 10px; }
+.post-later { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.post-later .post-more { font-size: 14px; }
 .post-month { font-family: var(--serif); font-size: 15px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin: 18px 0 2px; }
 .post-month:first-child { margin-top: 0; }
 .post {

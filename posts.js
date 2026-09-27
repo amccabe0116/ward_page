@@ -212,19 +212,47 @@ window.NPPosts = (function () {
   }
 
   // ---- the home page list ----
-  function renderPublic(box, posts) {
+  // How far ahead to show: a row of chips above the list, 2 months by default (general conference
+  // next spring shouldn't crowd out this week's FHE). The choice sticks on this phone. Anything past
+  // the cutoff is counted under the list with a one-tap "show everything".
+  const HORIZONS = [[31, '1 month'], [62, '2 months'], [184, '6 months'], [0, 'All']];
+  const HORIZON_DEFAULT = 62, HORIZON_KEY = 'np_horizon';
+  function horizonPref() { try { const s = localStorage.getItem(HORIZON_KEY), v = Number(s); return s !== null && HORIZONS.some(h => h[0] === v) ? v : HORIZON_DEFAULT; } catch (e) { return HORIZON_DEFAULT; } }
+  function setHorizon(days) { try { localStorage.setItem(HORIZON_KEY, String(days)); } catch (e) { /* private mode: just this render */ } }
+  function plusDays(iso, n) { const [y, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
+  function renderPublic(box, posts, opts) {
+    opts = opts || {};
     box.innerHTML = '';
     const all = expand(posts), dated = all.filter(p => p.event_date), undated = all.filter(p => !p.event_date);
     if (!posts.length) { box.appendChild(el('p', { class: 'empty' }, 'Nothing posted yet — check back soon, or add something below.')); return; }
-    if (dated.length) {
+    const horizon = opts.horizon != null ? opts.horizon : horizonPref();
+    const today = todayIso();
+    const beyond = days => dated.filter(p => days && p.event_date > plusDays(today, days));
+    const hidden = beyond(horizon), shown = dated.filter(p => !hidden.includes(p));
+    const pick = days => { setHorizon(days); renderPublic(box, posts, Object.assign({}, opts, { horizon: days })); };
+    // the chips only matter once something sits past the shortest window
+    if (beyond(HORIZONS[0][0]).length) {
+      box.appendChild(el('div', { class: 'post-filter' }, [
+        el('span', { class: 'lbl' }, 'Show'),
+        ...HORIZONS.map(([days, label]) => el('button', { class: 'chip' + (days === horizon ? ' on' : ''), type: 'button', 'data-days': days, onclick: () => pick(days) }, label)),
+      ]));
+    }
+    if (shown.length) {
       const list = el('div', { class: 'post-list' });
       let lastMonth = '';
-      for (const p of dated) {
+      for (const p of shown) {
         const dp = dateParts(p.event_date); const key = `${dp.y}-${dp.m}`;
         if (key !== lastMonth) { list.appendChild(el('h4', { class: 'post-month' }, `${MONTHS[dp.m - 1]} ${dp.y}`.replace(/^(\w+) (\d+)$/, (s, mo, y) => y === String(new Date().getFullYear()) ? mo : s))); lastMonth = key; }
         list.appendChild(card(p));
       }
       box.appendChild(list);
+    }
+    if (hidden.length) {
+      const next = dateParts(hidden[0].event_date);
+      box.appendChild(el('p', { class: 'post-later' }, [
+        `${hidden.length} more later on (next: ${hidden[0].title}, ${next.mon} ${next.d}${next.y !== Number(today.slice(0, 4)) ? ', ' + next.y : ''}). `,
+        el('button', { class: 'post-more', type: 'button', onclick: () => pick(0) }, 'Show everything'),
+      ]));
     }
     if (undated.length) {
       box.appendChild(el('h4', { class: 'post-month' }, 'Announcements'));

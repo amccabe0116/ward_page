@@ -113,7 +113,12 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
 
 7. **Announcements as posts.** The home page's *What's happening* section lists posts — each
    an event (date, time, place, details, link, flyer) or an undated notice — soonest first, grouped
-   by month, dropping off after the day passes (notices stay 30 days). *Share something* opens
+   by month, dropping off after the day passes (notices stay 30 days). A *Show* row of chips picks
+   how far ahead the list goes (1 month / 2 months / 6 months / All — 2 months by default,
+   remembered on that phone); what's past the cutoff is counted under the list with a *Show
+   everything* link, so next spring's general conference doesn't crowd out this week's FHE. The
+   weekly email does the same on its own: events more than 45 days out are one line each under
+   *Save the date*. *Share something* opens
    `post.html`, where anyone can write a post and attach a flyer; the image is shrunk in the
    browser (longest side 1600 px, JPEG) and uploaded to the public Supabase storage bucket
    `flyers` (3 MB cap, images only, upload-only for the public key), then `submit_post` stores
