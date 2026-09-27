@@ -30,6 +30,7 @@ window.NPPipeline = (function () {
     if (r.sustained_at) return { key: 'sustained', label: 'Sustained', k: 'ok', next: 'to be set apart' };
     if (r.accepted === 'yes') return { key: 'accepted', label: 'Accepted', k: 'ok', next: 'to be sustained' };
     if (r.accepted === 'no') return { key: 'declined', label: 'Declined', k: 'need' };
+    if (r.sheet && truthy(r.answer)) return { key: 'answered', label: 'Answered: ' + (r.answer.length > 24 ? r.answer.slice(0, 22) + '…' : r.answer), k: 'need' };
     if (r.contacted_at) return { key: 'contacted', label: 'Contacted', k: 'wait', next: 'waiting on an answer' };
     if (truthy(r.contact)) return { key: 'contact', label: 'To contact', k: 'wait', next: r.contact + ' contacts them' };
     return { key: 'proposed', label: 'Proposed', k: 'wait', next: 'nobody assigned to contact them yet' };
@@ -41,8 +42,10 @@ window.NPPipeline = (function () {
     const calling = String(p.proposed || p.assignment || '').trim();
     if (!calling) return null;
     const isTicked = NPCallings.isTicked;
-    const accepted = /accept|^\s*y(es)?\s*$/i.test(p.answer || '') ? 'yes' : truthy(p.answer) ? 'no' : null;
-    return { sheet: true, person: p, name: p.name, calling, contact: p.proposed ? p.assignment : '', contacted_at: isTicked(p.texted) ? 'y' : null, accepted, accepted_at: null, sustained_at: isTicked(p.sustained) ? 'y' : null, set_apart_at: null, status: 'open', notes: p.notes };
+    // the sheet's Answer is free text: yes-ish → accepted, a clear no → declined, anything else stays "answered" (shown as written)
+    const answer = String(p.answer || '').trim();
+    const accepted = /accept|^\s*y(es)?\s*$/i.test(answer) ? 'yes' : /declin|not at this time|moved|not in ward|undeliverable|^\s*n(o)?\s*$/i.test(answer) ? 'no' : null;
+    return { sheet: true, person: p, name: p.name, calling, contact: p.proposed ? p.assignment : '', contacted_at: isTicked(p.texted) ? 'y' : null, accepted, answer, accepted_at: null, sustained_at: isTicked(p.sustained) ? 'y' : null, set_apart_at: null, status: 'open', notes: p.notes };
   }
 
   // ---------- lookups ----------

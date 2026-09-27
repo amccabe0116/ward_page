@@ -88,13 +88,14 @@ end $$;
 create or replace function public.admin_pipeline_step(p_pass text, p_id bigint, p_step text, p_date date default current_date, p_by text default null)
 returns void
 language plpgsql security definer set search_path = public, extensions as $$
+declare d date := coalesce(p_date, current_date);   -- an explicit null still means today
 begin
   perform _check_admin(p_pass);
   if p_step = 'sustained' then
-    update calling_pipeline set sustained_at = coalesce(sustained_at, p_date), accepted = 'yes', accepted_at = coalesce(accepted_at, p_date), contacted_at = coalesce(contacted_at, p_date),
+    update calling_pipeline set sustained_at = coalesce(sustained_at, d), accepted = 'yes', accepted_at = coalesce(accepted_at, d), contacted_at = coalesce(contacted_at, d),
       status = case when status = 'dropped' then 'open' else status end, updated_at = now(), updated_by = left(p_by, 80) where id = p_id;
   elsif p_step = 'set_apart' then
-    update calling_pipeline set set_apart_at = coalesce(set_apart_at, p_date), sustained_at = coalesce(sustained_at, p_date), accepted = 'yes', accepted_at = coalesce(accepted_at, p_date), contacted_at = coalesce(contacted_at, p_date),
+    update calling_pipeline set set_apart_at = coalesce(set_apart_at, d), sustained_at = coalesce(sustained_at, d), accepted = 'yes', accepted_at = coalesce(accepted_at, d), contacted_at = coalesce(contacted_at, d),
       status = 'done', updated_at = now(), updated_by = left(p_by, 80) where id = p_id;
   else raise exception 'bad step';
   end if;
