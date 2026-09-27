@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=17">
+  <link rel="stylesheet" href="app.css?v=18">
 </head>
 <body>
   <!-- Missionary meals (supabase/meals.sql): the North Sisters and the South Sisters (an Elders
@@ -46,8 +46,8 @@
   </main>
 
   <!-- the booking sheet for one day -->
-  <div class="sheet" id="sheet" hidden>
-    <div class="sheet-card">
+  <div class="signup-sheet" id="sheet" hidden>
+    <div class="signup-card">
       <h2 id="sheet-title">Book a meal</h2>
       <p class="muted" id="sheet-sub"></p>
       <div class="field"><label for="name">Your name</label><input id="name" type="text" maxlength="80" autocomplete="name"></div>
@@ -135,9 +135,9 @@
         $('sheet-title').textContent = `${comp.label} · ${longDate(day)}`;
         $('sheet-sub').textContent = comp.sisters ? `Somewhere in ${comp.area || 'their area'}. You’ll get their number once you’re booked.` : 'You’ll get their number once you’re booked.';
         $('companion-field').hidden = !needsCompanion();
-        errEl.hidden = true; $('sheet').hidden = false; document.body.classList.add('sheet-open'); setTimeout(() => $('name').focus(), 50);
+        errEl.hidden = true; $('sheet').hidden = false; document.body.classList.add('signup-open'); setTimeout(() => $('name').focus(), 50);
       }
-      function closeSheet() { $('sheet').hidden = true; document.body.classList.remove('sheet-open'); current = null; }
+      function closeSheet() { $('sheet').hidden = true; document.body.classList.remove('signup-open'); current = null; }
       $('cancel').addEventListener('click', closeSheet);
       $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
       document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });

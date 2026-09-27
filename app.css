@@ -636,16 +636,16 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .meals-rules { display: grid; gap: 8px; font-size: 14px; margin: 12px 0 14px; }
 .meals-rules .rule b { color: var(--navy); }
 /* the sign-up sheet on cleaning.html / meals.html */
-.sheet { position: fixed; inset: 0; z-index: 60; background: rgba(27,42,65,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 0; overflow: auto; }
-.sheet[hidden] { display: none; }
-.sheet-card { position: relative; background: var(--card); border-radius: 18px 18px 0 0; padding: 18px 18px 22px; width: 100%; max-width: 560px; box-shadow: 0 -12px 40px rgba(0,0,0,0.25); max-height: 92vh; overflow: auto; }
-.sheet-card h2 { font-family: var(--serif); font-size: 21px; margin: 0 0 4px; }
-.sheet-card .muted { margin: 0 0 12px; }
-.sheet-card .inline.wrap2 > .field { flex: 1 1 140px; }
-.sheet-card .actionbar { margin-top: 6px; display: flex; gap: 8px; position: static; background: none; padding: 6px 0 0; }
-.sheet-card .actionbar .btn { width: auto; flex: 1; }
-body.sheet-open { overflow: hidden; }
-@media (min-width: 640px) { .sheet { align-items: center; padding: 24px 12px; } .sheet-card { border-radius: var(--radius); } }
+.signup-sheet { position: fixed; inset: 0; z-index: 60; background: rgba(27,42,65,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 0; overflow: auto; }
+.signup-sheet[hidden] { display: none; }
+.signup-card { position: relative; background: var(--card); border-radius: 18px 18px 0 0; padding: 18px 18px 22px; width: 100%; max-width: 560px; box-shadow: 0 -12px 40px rgba(0,0,0,0.25); max-height: 92vh; overflow: auto; }
+.signup-card h2 { font-family: var(--serif); font-size: 21px; margin: 0 0 4px; }
+.signup-card .muted { margin: 0 0 12px; }
+.signup-card .inline.wrap2 > .field { flex: 1 1 140px; }
+.signup-card .actionbar { margin-top: 6px; display: flex; gap: 8px; position: static; background: none; padding: 6px 0 0; }
+.signup-card .actionbar .btn { width: auto; flex: 1; }
+body.signup-open { overflow: hidden; }
+@media (min-width: 640px) { .signup-sheet { align-items: center; padding: 24px 12px; } .signup-card { border-radius: var(--radius); } }
 
 /* Leaders › Service */
 .cl-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
