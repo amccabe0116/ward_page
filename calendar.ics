@@ -150,6 +150,24 @@ LAST-MODIFIED:20260918T141142Z
 SEQUENCE:0
 END:VEVENT
 BEGIN:VEVENT
+UID:post-19@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART:20261003T160000Z
+DTEND:20261003T220000Z
+SUMMARY:General Conference
+DESCRIPTION:Saturday and Sunday\, October 3–4. Sessions at 12:00 PM and 
+ 4:00 PM Eastern both days (10 AM and 2 PM Mountain). Watch live on Chur
+ chofJesusChrist.org\, the Gospel Library app or YouTube — recordings ar
+ e up right after each session. No regular Sunday meetings on conference
+  weekend\, so get together and watch with friends.\nSign up / details: 
+ https://conference.churchofjesuschrist.org\nEverything\, always up to d
+ ate: https://northpointysa.com
+URL:https://conference.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
 UID:post-6@northpointysa.com
 DTSTAMP:20260918T141142Z
 DTSTART:20261011T230000Z
@@ -229,5 +247,208 @@ URL:https://docs.google.com/forms/d/e/1FAIpQLSc-Xs_NcHely6ppnSjNpUvJxUFY
 CREATED:20260924T101737Z
 LAST-MODIFIED:20260926T024647Z
 SEQUENCE:2429
+END:VEVENT
+BEGIN:VEVENT
+UID:post-20@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART:20261102T010000Z
+DTEND:20261102T020000Z
+SUMMARY:Worldwide Devotional for Young Adults
+DESCRIPTION:Church leaders speak to young adults (18–35) around the worl
+ d — counsel meant especially for us. 8:00 PM Eastern (6:00 PM Mountain)
+ \, about an hour. Watch live on ChurchofJesusChrist.org or the Gospel L
+ ibrary app\, or gather with friends to watch it together.\nSign up / de
+ tails: https://events.churchofjesuschrist.org\nEverything\, always up t
+ o date: https://northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-21@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART;VALUE=DATE:20261205
+DTEND;VALUE=DATE:20261206
+SUMMARY:NP Christmas Party
+LOCATION:Roswell Stake Center\, 500 Norcross Street
+DESCRIPTION:North Point Ward Christmas party — food\, folks and fun! Bri
+ ng your friends. Time and details coming.\nEverything\, always up to da
+ te: https://northpointysa.com
+URL:https://northpointysa.com
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-22@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART;VALUE=DATE:20261206
+DTEND;VALUE=DATE:20261207
+SUMMARY:First Presidency’s Christmas Devotional
+DESCRIPTION:The First Presidency’s Christmas devotional opens the Christ
+ mas season with messages and music about the birth of Jesus Christ. Wat
+ ch on ChurchofJesusChrist.org or the Gospel Library app — time to be an
+ nounced\, and it stays available afterward.\nSign up / details: https:/
+ /events.churchofjesuschrist.org\nEverything\, always up to date: https:
+ //northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-23@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART;VALUE=DATE:20261220
+DTEND;VALUE=DATE:20261221
+SUMMARY:Christmas Sunday: one-hour sacrament meeting
+DESCRIPTION:The Sunday before Christmas is a special one-hour sacrament 
+ meeting focused on the birth of the Savior — talks and music centered o
+ n Christ\, and no second-hour classes. Everyone’s welcome\, so bring fr
+ iends or family who are in town.\nEverything\, always up to date: https
+ ://northpointysa.com
+URL:https://northpointysa.com
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-24@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART:20270208T010000Z
+DTEND:20270208T020000Z
+SUMMARY:Worldwide Devotional for Young Adults
+DESCRIPTION:Elder Ronald A. Rasband of the Quorum of the Twelve speaks t
+ o young adults (18–35) around the world. 8:00 PM Eastern (6:00 PM Mount
+ ain)\, about an hour. Watch live on ChurchofJesusChrist.org or the Gosp
+ el Library app\, or gather with friends to watch it together.\nSign up 
+ / details: https://events.churchofjesuschrist.org\nEverything\, always 
+ up to date: https://northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-25@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART;VALUE=DATE:20270328
+DTEND;VALUE=DATE:20270329
+SUMMARY:Easter Sunday
+DESCRIPTION:Holy Week runs from Palm Sunday\, March 21\, to Easter Sunda
+ y\, March 28. Easter Sunday is a special sacrament meeting with talks a
+ nd music focused on the Savior\, and no second-hour classes — a great S
+ unday to invite friends and family. Holy Week resources at Easter.Churc
+ hofJesusChrist.org.\nSign up / details: https://easter.churchofjesuschr
+ ist.org\nEverything\, always up to date: https://northpointysa.com
+URL:https://easter.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-26@northpointysa.com
+DTSTAMP:20260927T025844Z
+DTSTART:20270403T160000Z
+DTEND:20270403T220000Z
+SUMMARY:General Conference
+DESCRIPTION:Saturday and Sunday\, April 3–4. Sessions at 12:00 PM and 4:
+ 00 PM Eastern both days (10 AM and 2 PM Mountain). Watch live on Church
+ ofJesusChrist.org\, the Gospel Library app or YouTube — recordings are 
+ up right after each session. No regular Sunday meetings on conference w
+ eekend\, so get together and watch with friends.\nSign up / details: ht
+ tps://conference.churchofjesuschrist.org\nEverything\, always up to dat
+ e: https://northpointysa.com
+URL:https://conference.churchofjesuschrist.org
+CREATED:20260927T025844Z
+LAST-MODIFIED:20260927T025844Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-27@northpointysa.com
+DTSTAMP:20260927T025845Z
+DTSTART;VALUE=DATE:20270405
+DTEND;VALUE=DATE:20270406
+SUMMARY:Salt Lake Temple Celebration begins
+DESCRIPTION:April 5 through October 1\, 2027: the renovated Salt Lake Te
+ mple opens for tours — in person on Temple Square and virtually — ahead
+  of its rededication. An opening event with music and performances stre
+ ams the first weekend (April 9–10). Details at TempleSquare.org.\nSign 
+ up / details: https://www.templesquare.org\nEverything\, always up to d
+ ate: https://northpointysa.com
+URL:https://www.templesquare.org
+CREATED:20260927T025845Z
+LAST-MODIFIED:20260927T025845Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-28@northpointysa.com
+DTSTAMP:20260927T025845Z
+DTSTART:20270503T000000Z
+DTEND:20270503T010000Z
+SUMMARY:Worldwide Devotional for Young Adults
+DESCRIPTION:A member of the Quorum of the Twelve speaks to young adults 
+ (18–35) around the world. 8:00 PM Eastern (6:00 PM Mountain)\, about an
+  hour. Watch live on ChurchofJesusChrist.org or the Gospel Library app\
+ , or gather with friends to watch it together.\nSign up / details: http
+ s://events.churchofjesuschrist.org\nEverything\, always up to date: htt
+ ps://northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025845Z
+LAST-MODIFIED:20260927T025845Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-29@northpointysa.com
+DTSTAMP:20260927T025845Z
+DTSTART:20271002T160000Z
+DTEND:20271002T220000Z
+SUMMARY:General Conference
+DESCRIPTION:Saturday and Sunday\, October 2–3. Sessions at 12:00 PM and 
+ 4:00 PM Eastern both days (10 AM and 2 PM Mountain). Watch live on Chur
+ chofJesusChrist.org\, the Gospel Library app or YouTube — recordings ar
+ e up right after each session. No regular Sunday meetings on conference
+  weekend\, so get together and watch with friends.\nSign up / details: 
+ https://conference.churchofjesuschrist.org\nEverything\, always up to d
+ ate: https://northpointysa.com
+URL:https://conference.churchofjesuschrist.org
+CREATED:20260927T025845Z
+LAST-MODIFIED:20260927T025845Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-30@northpointysa.com
+DTSTAMP:20260927T025845Z
+DTSTART:20271108T010000Z
+DTEND:20271108T020000Z
+SUMMARY:Worldwide Devotional for Young Adults
+DESCRIPTION:A member of the Quorum of the Twelve speaks to young adults 
+ (18–35) around the world. 8:00 PM Eastern (6:00 PM Mountain)\, about an
+  hour. Watch live on ChurchofJesusChrist.org or the Gospel Library app\
+ , or gather with friends to watch it together.\nSign up / details: http
+ s://events.churchofjesuschrist.org\nEverything\, always up to date: htt
+ ps://northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025845Z
+LAST-MODIFIED:20260927T025845Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:post-31@northpointysa.com
+DTSTAMP:20260927T025845Z
+DTSTART;VALUE=DATE:20271205
+DTEND;VALUE=DATE:20271206
+SUMMARY:First Presidency’s Christmas Devotional
+DESCRIPTION:The First Presidency’s Christmas devotional opens the Christ
+ mas season with messages and music about the birth of Jesus Christ. Wat
+ ch on ChurchofJesusChrist.org or the Gospel Library app — time to be an
+ nounced\, and it stays available afterward.\nSign up / details: https:/
+ /events.churchofjesuschrist.org\nEverything\, always up to date: https:
+ //northpointysa.com
+URL:https://events.churchofjesuschrist.org
+CREATED:20260927T025845Z
+LAST-MODIFIED:20260927T025845Z
+SEQUENCE:0
 END:VEVENT
 END:VCALENDAR
