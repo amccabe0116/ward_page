@@ -80,6 +80,10 @@ Leaders › Overview feeds — also every run (two quick copies, no clicking):
    LCR tab: navigate to https://lcr.churchofjesuschrist.org/report/sacrament-attendance?lang=eng,
             run scripts/lcr-sacrament.js (current year; in January also run it with year: <last year>
             and merge the two row lists before storing).
+   LCR tab: navigate to https://lcr.churchofjesuschrist.org/one-work/progress-record?lang=eng
+            (Covenant Path Progress, "New Members" tab = converts from the last two years), wait for
+            the cards, run scripts/lcr-converts.js → key 'lcr_converts' (name, member-for, last six
+            Sundays, missed count, friends). Feeds the Overview's "Recent converts" card.
    site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } for each.
 
 (The SimpleTexting text list is NOT fed from LCR: the Apps Script's `syncTextList` adds only the

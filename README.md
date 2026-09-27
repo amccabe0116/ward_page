@@ -18,8 +18,9 @@ terms.html          Text-list Terms of Service (required by SimpleTexting) — n
 privacy.html        Text-list Privacy Policy (required by SimpleTexting) — not linked from the site
 keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
 admin.html          Leaders page: 12-hour login, overview, attendance by Sunday, inbox, announcements, callings meeting, members, settings
-overview.js         Leaders › Overview: roll size, men/women, moved in last 30 days, sacrament attendance, accepted-not-sustained
+overview.js         Leaders › Overview: roll size, men/women, moved in last 30 days, sacrament attendance, to be sustained / set apart, recent converts
 callings.js         Leaders › Callings: the members-without-callings list + one-person-per-slide meeting deck
+pipeline.js         callings in progress for any member (proposed → contacted → accepted → sustained → set apart): the Members column + editor
 config.js           Supabase URL / anon key (public by design)
 announcements.json  written by the Sunday-night announcements job
 img/                flyers attached to the announcements email
@@ -27,6 +28,7 @@ supabase/schema.sql database (tables, RLS, RPC functions) — paste into the SQL
 scripts/lcr-sync.js runs inside a signed-in LCR tab: roster → Supabase, check-ins → LCR
 scripts/lcr-report.js             runs inside a signed-in LCR tab: a report table (members without callings, members moved in) → site
 scripts/lcr-sacrament.js          runs inside a signed-in LCR tab: the sacrament meeting headcounts → site
+scripts/lcr-converts.js           runs inside a signed-in LCR tab: Covenant Path Progress › New Members (converts, two years) → site
 scripts/announcements.gs          Google Apps Script: announcements email → repo, every Sunday night
 scripts/publish_announcements.py  same thing from a raw .eml, for manual use
 supabase/guests.sql               guests/visitors table + functions (part of schema.sql too)
@@ -42,6 +44,7 @@ supabase/posts.sql                posts (events / notices with flyers), public s
 supabase/repeat.sql               repeating posts (weekly / every 2 weeks / monthly), cancelling one date
 supabase/bishop.sql               Bishop meeting requests texted to the executive secretary (claim-once + the number setting)
 supabase/dinner.sql               dinner with the missionaries: sign-ups, pairs, the on/off switch (dinner_enabled)
+supabase/pipeline.sql             callings in progress for any member (calling_pipeline): proposed → contacted → accepted → sustained → set apart
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
 
@@ -95,9 +98,26 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
 5. **Leaders › Overview** is the landing page: active members and men/women split from the
    roster, who moved in during the last 30 days (LCR's *Members Moved In* report, copied in as
    sheet `lcr_moved_in`), the last five sacrament meeting headcounts (LCR's *Sacrament Meeting
-   Attendance*, sheet `lcr_sacrament` via `scripts/lcr-sacrament.js`), and everyone on the
-   callings sheet who accepted but hasn't been sustained. The two LCR copies are part of the
-   Sunday sync (`scripts/jobs.md`).
+   Attendance*, sheet `lcr_sacrament` via `scripts/lcr-sacrament.js`), two callings lists —
+   *accepted, still to be sustained* and *sustained, still to be set apart* — and **recent
+   converts** (LCR's *Covenant Path Progress › New Members*, sheet `lcr_converts` via
+   `scripts/lcr-converts.js`: how long a member, the last six Sundays as dots, LCR's count of
+   sacrament meetings missed, friends identified; chips filter 3 months / 6 months / 1 year /
+   2 years, remembered per device). The LCR copies are part of the Sunday sync (`scripts/jobs.md`).
+
+   The callings lists come from two places. **Callings in progress** (`pipeline.js`,
+   `supabase/pipeline.sql`, table `calling_pipeline`) tracks a calling for *any* member in the
+   order it happens — proposed calling → who contacts → contacted → accepted (yes / no) →
+   sustained → set apart; recording a later step fills in the earlier ones, set apart closes the
+   row (done), declined or *Withdraw* closes it as dropped. Leaders › Members has a *Calling in
+   progress* column showing the open row's calling, current step and who contacts; tapping it
+   opens the editor (dates default to today), *+ propose* starts one. Someone on the *Members
+   without Callings* sheet with a proposal there but no row here shows the sheet's state (marked
+   *· sheet*); tapping *Track* copies it over. The Overview merges both: tracked rows first, then
+   sheet people (Answer says yes / Sustained ticked) not tracked yet. *Sustained ✓* and *Set
+   apart ✓* on those rows record the step (for a sheet person it starts the tracked row and, for
+   sustaining, ticks the sheet's box too); a name opens the member's editor, or the callings slide
+   for sheet people.
 
 6. **Add to sheet.** People on LCR's report with no row on the sheet get an *Add to sheet*
    button on their slide (and an *Add all* chip on the New / not on sheet filter). The row is

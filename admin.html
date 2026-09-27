@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=14">
+  <link rel="stylesheet" href="app.css?v=15">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -299,7 +299,8 @@
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=23"></script>
   <script src="posts.js?v=12"></script>
-  <script src="overview.js?v=1"></script>
+  <script src="pipeline.js?v=1"></script>
+  <script src="overview.js?v=2"></script>
   <script>
     (function () {
       const { C, rpc, el, toast, fmtDate } = NP;
@@ -320,8 +321,9 @@
         else NPOverview.load();
       }
       NPCallings.init({ getPass: () => pass, getMembers: () => members });
+      NPPipeline.init({ getPass: () => pass, getMembers: () => members });
       document.querySelector('.tab[data-pane=callings]').addEventListener('click', () => NPCallings.load());
-      NPOverview.init({ getPass: () => pass, getMembers: () => members, openCallings: name => { document.querySelector('.tab[data-pane=callings]').click(); NPCallings.load().then(() => NPCallings.openPerson(name)); } });
+      NPOverview.init({ getPass: () => pass, getMembers: () => members, openCallings: name => { document.querySelector('.tab[data-pane=callings]').click(); NPCallings.load().then(() => NPCallings.openPerson(name)); }, openMember: id => openMemberCalling(id) });
       document.querySelector('.tab[data-pane=overview]').addEventListener('click', () => NPOverview.load());
       $('ov-refresh').addEventListener('click', () => NPOverview.refresh());
       async function loginWithPassphrase(p) {
@@ -620,22 +622,46 @@
         const box = $('members'); box.innerHTML = '';
         const active = members.filter(m => m.active).length;
         $('members-count').textContent = `${active} active · ${members.length - active} inactive`;
-        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Flag'), el('th', {}, '')])));
+        const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Calling in progress'), el('th', {}, 'Flag'), el('th', {}, '')])));
         const tb = el('tbody');
         for (const m of members) {
           if (q && !m.name.toLowerCase().includes(q)) continue;
           const ss = (m.lcr_classes || []).find(c => C.classes.sunday_school.orgTypeIds.includes(c.orgTypeId));
-          tb.appendChild(el('tr', {}, [
+          const tr = el('tr', { 'data-member': m.id }, [
             el('td', {}, m.name),
             el('td', {}, m.org || ''),
             el('td', { class: 'muted' }, ss ? ss.orgName : '—'),
             el('td', {}, el('span', { class: 'pill ' + (m.active ? 'ok' : 'off') }, m.active ? 'active' : 'inactive')),
+            el('td', { class: 'pipe-td' }, pipelineCell(m)),
             el('td', { class: 'flag-cell' }, flagCell(m)),
             el('td', {}, el('button', { class: 'chip', onclick: async () => { await rpc('admin_set_member_active', { p_pass: pass, p_member_id: m.id, p_active: !m.active }); m.active = !m.active; renderMembers(); } }, m.active ? 'Deactivate' : 'Activate')),
-          ]));
+          ]);
+          tb.appendChild(tr);
         }
         t.appendChild(tb); box.appendChild(t);
-        if (!flagsReady && !flagsLoading) { flagsLoading = true; NPCallings.load().then(() => { flagsReady = true; renderMembers(); }).catch(() => {}).finally(() => { flagsLoading = false; }); }
+        if (!flagsReady && !flagsLoading) { flagsLoading = true; Promise.all([NPCallings.load(), NPPipeline.load()]).then(() => { flagsReady = true; renderMembers(); }).catch(() => {}).finally(() => { flagsLoading = false; }); }
+      }
+      // Calling in progress: the open pipeline row (or what the callings sheet says); tap to edit in a
+      // small window over the list (the table is too wide on a phone for an inline editor).
+      function pipelineCell(m) {
+        if (!flagsReady) return el('span', { class: 'muted small' }, '…');
+        return NPPipeline.cell(m, (row, pre) => openPipeEditor(m, row, pre));
+      }
+      function openPipeEditor(m, row, pre) {
+        document.querySelectorAll('.pipe-modal').forEach(x => x.remove());
+        const close = changed => { modal.remove(); document.removeEventListener('keydown', onKey); if (changed) { renderMembers(); NPOverview.refresh(); } };
+        const onKey = e => { if (e.key === 'Escape') close(false); };
+        const modal = el('div', { class: 'pipe-modal', onclick: e => { if (e.target === modal) close(false); } }, el('div', { class: 'pipe-card' }, [
+          el('h3', {}, [m.display_name || m.name, el('span', { class: 'muted' }, row ? ' · ' + row.calling : ' · calling')]),
+          NPPipeline.editor(m, row, pre, close),
+        ]));
+        document.body.appendChild(modal); document.addEventListener('keydown', onKey);
+      }
+      // Leaders › Overview → this member's editor
+      function openMemberCalling(memberId) {
+        const m = members.find(x => x.id === memberId); if (!m) { toast('Not on the members list'); return; }
+        document.querySelector('.tab[data-pane=members]').click();
+        $('members-search').value = m.name; renderMembers(); openPipeEditor(m, NPPipeline.openFor(m), null);
       }
       // Warning / Magnet straight from the list: the same Flag column the Callings slide edits
       // (someone not on the callings list gets a row there; "Send" opens their slide for the message).
@@ -657,6 +683,8 @@
         return el('div', { class: 'inline', style: 'gap:6px' }, bits);
       }
       $('members-search').addEventListener('input', renderMembers);
+      // callings move along from the Overview too — redraw the list each time the tab opens
+      document.querySelector('.tab[data-pane=members]').addEventListener('click', () => { if (flagsReady) renderMembers(); });
 
       // ---- inbox: meeting requests + notes to leadership ----
       let meetings = [];
