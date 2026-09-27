@@ -162,6 +162,8 @@
           <span class="muted" id="members-count"></span>
           <input class="search" id="members-search" type="search" placeholder="Filter" style="max-width:260px;padding-left:40px">
         </div>
+        <!-- where each person is in the callings process (pipeline.js) -->
+        <div class="chips members-chips" id="members-chips"></div>
         <div id="members"></div>
         <details style="margin-top:16px">
           <summary class="muted">Import / refresh members from JSON</summary>
@@ -299,7 +301,7 @@
   <script src="app.js?v=2"></script>
   <script src="callings.js?v=23"></script>
   <script src="posts.js?v=12"></script>
-  <script src="pipeline.js?v=2"></script>
+  <script src="pipeline.js?v=3"></script>
   <script src="overview.js?v=2"></script>
   <script>
     (function () {
@@ -621,12 +623,21 @@
         const q = $('members-search').value.trim().toLowerCase();
         const box = $('members'); box.innerHTML = '';
         const active = members.filter(m => m.active).length;
-        $('members-count').textContent = `${active} active · ${members.length - active} inactive`;
+        // the process chips (only once the callings data is in — the counts need it)
+        const chips = $('members-chips'); chips.innerHTML = '';
+        const stageOf = new Map(flagsReady ? members.map(m => [m.id, NPPipeline.stageFor(m)]) : []);
+        const group = NPPipeline.GROUPS.find(g => g[0] === memberFilter) || NPPipeline.GROUPS[0];
+        if (flagsReady) for (const [key, label, test] of NPPipeline.GROUPS) {
+          const n = members.filter(m => test(m, stageOf.get(m.id))).length;
+          if (!n && key !== 'all') continue;   // an empty stage isn't worth a chip
+          chips.appendChild(el('button', { class: 'chip' + (memberFilter === key ? ' on' : ''), type: 'button', onclick: () => { memberFilter = key; renderMembers(); } }, key === 'all' ? label : `${label} · ${n}`));
+        }
+        const shown = members.filter(m => (!q || m.name.toLowerCase().includes(q)) && (!flagsReady || group[2](m, stageOf.get(m.id))));
+        $('members-count').textContent = `${active} active · ${members.length - active} inactive` + (memberFilter !== 'all' || q ? ` · showing ${shown.length}` : '');
         // active / inactive comes from the weekly LCR sync (the roster refresh deactivates anyone LCR no longer lists) — no hand switch here
         const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Calling in progress'), el('th', {}, 'Flag')])));
         const tb = el('tbody');
-        for (const m of members) {
-          if (q && !m.name.toLowerCase().includes(q)) continue;
+        for (const m of shown) {
           const ss = (m.lcr_classes || []).find(c => C.classes.sunday_school.orgTypeIds.includes(c.orgTypeId));
           const tr = el('tr', { 'data-member': m.id }, [
             el('td', {}, m.name),
@@ -639,8 +650,10 @@
           tb.appendChild(tr);
         }
         t.appendChild(tb); box.appendChild(t);
+        if (!shown.length) box.appendChild(el('p', { class: 'empty' }, 'Nobody matches.'));
         if (!flagsReady && !flagsLoading) { flagsLoading = true; Promise.all([NPCallings.load(), NPPipeline.load()]).then(() => { flagsReady = true; renderMembers(); }).catch(() => {}).finally(() => { flagsLoading = false; }); }
       }
+      let memberFilter = 'all';
       // Calling in progress: the open pipeline row (or what the callings sheet says); tap to edit in a
       // small window over the list (the table is too wide on a phone for an inline editor).
       function pipelineCell(m) {
@@ -661,7 +674,7 @@
       function openMemberCalling(memberId) {
         const m = members.find(x => x.id === memberId); if (!m) { toast('Not on the members list'); return; }
         document.querySelector('.tab[data-pane=members]').click();
-        $('members-search').value = m.name; renderMembers(); openPipeEditor(m, NPPipeline.openFor(m), null);
+        $('members-search').value = m.name; memberFilter = 'all'; renderMembers(); openPipeEditor(m, NPPipeline.openFor(m), null);
       }
       // Warning / Magnet straight from the list: the same Flag column the Callings slide edits
       // (someone not on the callings list gets a row there; "Send" opens their slide for the message).

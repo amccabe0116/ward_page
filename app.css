@@ -468,6 +468,8 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .pipe-form .pipe-chk { width: 18px; height: 18px; }
 .pipe-form .btn.secondary.danger { background: var(--card); color: var(--danger); border-color: #f1c4c4; }
 #members { overflow-x: auto; }
+.members-chips { margin: 10px 0 12px; }
+.members-chips .chip { font-size: 13px; padding: 5px 11px; }
 @media (max-width: 720px) {
   .members-grid th:nth-child(2), .members-grid td:nth-child(2), .members-grid th:nth-child(3), .members-grid td:nth-child(3) { display: none; }
   .members-grid th, .members-grid td { padding: 8px 4px; }

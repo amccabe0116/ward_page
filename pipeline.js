@@ -87,6 +87,28 @@ window.NPPipeline = (function () {
     return save(Object.assign(v, extra || {}));
   }
 
+  // Where a member is, for the Members tab's filter chips: the open row here, else the sheet's state.
+  // { key, label, src: 'site' | 'sheet' } or null when nothing is in progress.
+  function stageFor(m) {
+    const r = openFor(m);
+    if (r) return Object.assign({ src: 'site' }, stage(r));
+    const s = NPCallings.personFor ? sheetState(NPCallings.personFor(m)) : null;
+    if (s) return Object.assign({ src: 'sheet' }, stage(s));
+    return null;
+  }
+  // The chips, in process order. `test` gets the member and their stage (or null).
+  const GROUPS = [
+    ['all', 'Everyone', () => true],
+    ['none', 'Nothing in progress', (m, st) => !st],
+    ['proposed', 'Proposed', (m, st) => !!st && st.key === 'proposed'],
+    ['contact', 'To contact', (m, st) => !!st && st.key === 'contact'],
+    ['contacted', 'Waiting on an answer', (m, st) => !!st && (st.key === 'contacted' || st.key === 'answered')],
+    ['accepted', 'Accepted · to be sustained', (m, st) => !!st && st.key === 'accepted'],
+    ['sustained', 'Sustained · to be set apart', (m, st) => !!st && st.key === 'sustained'],
+    ['declined', 'Declined', (m, st) => !!st && st.key === 'declined'],
+    ['done', 'Set apart recently', m => historyFor(m).some(h => h.status === 'done' && h.set_apart_at && (Date.now() - new Date(h.set_apart_at + 'T00:00:00').getTime()) < 90 * 864e5)],
+  ];
+
   // ---------- the Members column ----------
   // A compact line: calling · step pill · who contacts. Tapping it opens the editor (onOpen).
   function cell(m, onOpen) {
@@ -182,5 +204,5 @@ window.NPPipeline = (function () {
 
   function init(c) { ctx = c; }
   function data() { return { rows, loaded, unavailable }; }
-  return { init, load, refresh: () => load(true), data, stage, sheetState, openFor, historyFor, rowForPerson, cell, editor, save, step, remove, trackSheet, lists, fmtDay };
+  return { init, load, refresh: () => load(true), data, stage, sheetState, stageFor, GROUPS, openFor, historyFor, rowForPerson, cell, editor, save, step, remove, trackSheet, lists, fmtDay };
 })();
