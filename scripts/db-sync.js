@@ -80,6 +80,10 @@
     }
     if (cfg.action === 'callings') {
       if (!Array.isArray(cfg.headers) || !Array.isArray(cfg.rows)) throw new Error('callings needs headers, rows (run scripts/lcr-report.js on Members with Callings)');
+      // the report also carries birth dates and phone numbers — the site has no use for them, so
+      // the copy keeps only the person, organization, calling and dates (and drops LCR's unnamed icon column)
+      const keep = cfg.headers.map((h, i) => i).filter(i => String(cfg.headers[i] || '').trim() && !/birth|phone/i.test(String(cfg.headers[i])));
+      cfg.headers = keep.map(i => cfg.headers[i]); cfg.rows = cfg.rows.map(r => keep.map(i => r[i]));
       out.stored = await rpc('admin_replace_sheet', { p_pass: cfg.pass, p_key: 'lcr_with_callings', p_title: 'LCR: Members with Callings', p_source_url: cfg.sourceUrl || null, p_headers: cfg.headers, p_rows: cfg.rows, p_by: 'lcr-sync' });
       // columns by meaning, whatever LCR calls them this month
       const col = re => cfg.headers.findIndex(h => re.test(String(h || '')));

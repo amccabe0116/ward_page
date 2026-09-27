@@ -113,6 +113,14 @@ Notes:
  people who ticked "agree" on the New Member Form's texting question, every 6 hours or from
  Settings → Sync now. Nothing to do here for it.)
 
+Notes from the 2026-09-27 run (first with step E.5): LCR's Member Callings report comes out with
+the columns "", Name, Gender, Age, Birth Date, Phone Number, Organizations, Calling, Sustained,
+Set Apart; "Set Apart" was blank for everyone, so the close-out goes by the Sustained date.
+db-sync's 'callings' action now drops Birth Date and Phone Number (and the unnamed icon column)
+before storing the copy — the site never needed them. Roster 246 (+1), 111 check-ins pushed
+111/111 in two batches of ~56 (about a minute each), LCR's sacrament count for the day (55) was
+still a partial when the run happened at ~2 PM.
+
 Notes from the 2026-09-17 run: LCR rendered the custom report's column headers as untranslated
 keys ("record.preferred.name"); lcr-report.js now maps those back to the labels the site expects.
 The attendance report listed 243 members vs 273 on the site — all 30 were on LCR's Members Moved
