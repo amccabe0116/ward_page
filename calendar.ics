@@ -186,6 +186,22 @@ LAST-MODIFIED:20260927T040421Z
 SEQUENCE:12352
 END:VEVENT
 BEGIN:VEVENT
+UID:post-32@northpointysa.com
+DTSTAMP:20260927T041444Z
+DTSTART;VALUE=DATE:20261019
+DTEND;VALUE=DATE:20261020
+SUMMARY:Atlanta Temple closed for maintenance
+LOCATION:Atlanta Georgia Temple
+DESCRIPTION:The Atlanta Temple is closed for its regular maintenance and
+  cleaning from Monday\, October 19 through Monday\, November 2. Get you
+ r temple trips in before the 19th\, or plan for after it reopens.\nEver
+ ything\, always up to date: https://northpointysa.com
+URL:https://northpointysa.com
+CREATED:20260927T041444Z
+LAST-MODIFIED:20260927T041444Z
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
 UID:post-18@northpointysa.com
 DTSTAMP:20260926T025346Z
 DTSTART:20261024T223000Z
@@ -270,6 +286,21 @@ URL:https://events.churchofjesuschrist.org
 CREATED:20260927T025844Z
 LAST-MODIFIED:20260927T040142Z
 SEQUENCE:62
+END:VEVENT
+BEGIN:VEVENT
+UID:post-33@northpointysa.com
+DTSTAMP:20260927T041444Z
+DTSTART;VALUE=DATE:20261103
+DTEND;VALUE=DATE:20261104
+SUMMARY:Atlanta Temple reopens
+LOCATION:Atlanta Georgia Temple
+DESCRIPTION:The Atlanta Temple is back open after its two-week maintenan
+ ce closure (October 19 – November 2). Time to book appointments again.\
+ nEverything\, always up to date: https://northpointysa.com
+URL:https://northpointysa.com
+CREATED:20260927T041444Z
+LAST-MODIFIED:20260927T041444Z
+SEQUENCE:0
 END:VEVENT
 BEGIN:VEVENT
 UID:post-21@northpointysa.com
