@@ -822,7 +822,7 @@
         const active = members.filter(m => m.active).length;
         // the process chips (only once the callings data is in — the counts need it)
         const chips = $('members-chips'); chips.innerHTML = '';
-        const stageOf = new Map(flagsReady ? members.map(m => [m.id, NPPipeline.stageFor(m)]) : []);
+        const stageOf = new Map(flagsReady ? members.map(m => { try { return [m.id, NPPipeline.stageFor(m)]; } catch (e) { console.error(e); return [m.id, null]; } }) : []);
         const group = NPPipeline.GROUPS.find(g => g[0] === memberFilter) || NPPipeline.GROUPS[0];
         if (flagsReady) for (const [key, label, test] of NPPipeline.GROUPS) {
           const n = members.filter(m => test(m, stageOf.get(m.id))).length;
@@ -848,15 +848,19 @@
             el('td', {}, m.org || ''),
             el('td', { class: 'muted' }, ss ? ss.orgName : '—'),
             el('td', {}, el('span', { class: 'pill ' + (m.active ? 'ok' : 'off') }, m.active ? 'active' : 'inactive')),
-            el('td', { class: 'pipe-td' }, pipelineCell(m)),
-            el('td', { class: 'flag-cell' }, flagCell(m)),
+            el('td', { class: 'pipe-td' }, safeCell(() => pipelineCell(m))),
+            el('td', { class: 'flag-cell' }, safeCell(() => flagCell(m))),
           ]);
           tb.appendChild(tr);
         }
         t.appendChild(tb); box.appendChild(t);
         if (!shown.length) box.appendChild(el('p', { class: 'empty' }, 'Nobody matches.'));
-        if (!flagsReady && !flagsLoading) { flagsLoading = true; Promise.all([NPCallings.load(), NPPipeline.load()]).then(() => { flagsReady = true; renderMembers(); }).catch(() => {}).finally(() => { flagsLoading = false; }); }
+        if (flagsError) chips.appendChild(el('span', { class: 'notice', style: 'margin:0' }, 'The callings data didn’t load, so the Calling and Flag columns are blank: ' + flagsError));
+        if (!flagsReady && !flagsLoading && !flagsError) { flagsLoading = true; Promise.all([NPCallings.load(), NPPipeline.load()]).then(() => { flagsReady = true; renderMembers(); }).catch(e => { flagsError = String(e && e.message || e); renderMembers(); }).finally(() => { flagsLoading = false; }); }
       }
+      // one person's cell failing (odd data) must not take the whole list down with it
+      let flagsError = '';
+      function safeCell(make) { try { return make(); } catch (e) { console.error(e); return el('span', { class: 'pill warn', title: String(e && e.message || e) }, '!'); } }
       let memberFilter = 'all';
       // Calling in progress: the open pipeline row (or what the callings sheet says); tap to edit in a
       // small window over the list (the table is too wide on a phone for an inline editor).
