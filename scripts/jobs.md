@@ -47,7 +47,8 @@ so it can be called more than once).
 
 ```
 You maintain the North Point YSA ward site (northpointysa.com). Task: the weekly LCR sync —
-roster, today's check-ins into LCR, and the four report copies for the Leaders page.
+roster, today's check-ins into LCR, the LCR report copies for the Leaders page, and closing out
+tracked callings that LCR now has.
 Config: SUPABASE_URL=<url>, ANON_KEY=<publishable key>, PASS=<admin passphrase or a leaders token>.
 Runbook: https://northpointysa.com/scripts/jobs.md §2 — follow it; the steps are:
 
@@ -85,18 +86,28 @@ E. REPORTS — each: run the LCR script in the LCR tab, then db-sync { action: '
    4. Recent converts (Overview): https://lcr.churchofjesuschrist.org/one-work/progress-record?lang=eng
       (Covenant Path Progress, "New Members" tab — converts from the last two years), wait for the
       cards, run lcr-converts.js → key 'lcr_converts'.
+   5. Members WITH callings — closes out the callings tracked on Leaders › Members:
+      https://lcr.churchofjesuschrist.org/mlt/report/member-callings?lang=eng, wait for "Count: N",
+      run lcr-report.js { key: 'lcr_with_callings', title: 'LCR: Members with Callings' }, then in
+      the site tab db-sync { action: 'callings', headers, rows, sourceUrl } (NOT 'sheet'): it stores
+      the copy and removes every tracked calling that has reached "set apart" and now shows in LCR
+      (same person, a calling sustained on/after the tracked date). It returns `removed` (with
+      whether LCR shows them set apart) and `waiting` (set apart on the site, not in LCR yet —
+      mention those to the clerk).
    The leaders' Google Sheet (notes / flags) is NOT copied here — the Apps Script does that
    every 6 hours and from "Refresh from Google Sheets" on the Callings tab.
 F. Report in one paragraph: roster (size, added / removed by name), check-ins (week, pushed /
-   already marked / no cell by name, guests), and the four report row counts. Mention if LCR's
-   sacrament headcount for the day differs from the site's check-ins.
+   already marked / no cell by name, guests), the five report row counts, and the callings closed
+   out (removed) or still waiting on the clerk. Mention if LCR's sacrament headcount for the day
+   differs from the site's check-ins.
 ```
 
 Notes:
 - The LCR sign-in lasts under an hour; the run has to start right after Joseph signs in.
 - The push clicks LCR's own buttons: ~1 s per person; 110 people ≈ 2 minutes per batch.
 - Callings in progress (Leaders › Members / Overview, supabase/pipeline.sql) live only on the
-  site — nothing to sync. Sustaining and setting apart are recorded by hand on the Overview.
+  site. Sustaining and setting apart are recorded by hand on the Overview; step E.5 is what
+  retires a tracked calling once the clerk has it in LCR.
 
 (The SimpleTexting text list is NOT fed from LCR: the Apps Script's `syncTextList` adds only the
  people who ticked "agree" on the New Member Form's texting question, every 6 hours or from

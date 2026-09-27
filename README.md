@@ -63,8 +63,9 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    (`scripts/jobs.md` §2) in Claude's browser pane: it refreshes the roster from LCR's Class and
    Quorum Attendance report (the only thing that marks a member active or inactive — the Members
    tab has no switch), clicks the attendance buttons for everyone who checked in on the site,
-   then copies the four LCR reports the Leaders page reads (members without callings, members
-   moved in, sacrament headcounts, recent converts). Rows show as *synced* on the admin page once
+   then copies the LCR reports the Leaders page reads (members without callings, members moved
+   in, sacrament headcounts, recent converts, members with callings — the last one also retires
+   tracked callings that LCR now has). Rows show as *synced* on the admin page once
    LCR has them. Guests stay on the site only — LCR's Visitors tab takes men/women totals, and
    the ward chose not to send those.
 4. **Leaders › Callings.** Three sources meet here: LCR's *Members without Callings* custom
@@ -118,7 +119,11 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    by stage — proposed, waiting on an answer, accepted, sustained, declined, set apart in the
    last 90 days — with counts. *Who contacts* is shown alongside as
    information; it isn't a step. *Copy list* copies whoever is showing as one line per person
-   (name — calling — who contacts) for a text or meeting notes. Someone on the *Members
+   (name — calling — who contacts) for a text or meeting notes. A tracked calling that has reached
+   *set apart* is retired by the Sunday sync once LCR has it: `db-sync.js` action `callings` takes
+   LCR's *Members with Callings* report (copied in as sheet `lcr_with_callings`) and deletes each
+   done row whose person now has a calling in LCR sustained on or after the tracked date, reporting
+   the ones LCR still doesn't show. Someone on the *Members
    without Callings* sheet with a proposal there but no row here shows the sheet's state (marked
    *· sheet*); tapping *Track* copies it over. The Overview merges both: tracked rows first, then
    sheet people (Answer says yes / Sustained ticked) not tracked yet. *Sustained ✓* and *Set
