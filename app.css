@@ -532,6 +532,11 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .lede { font-size: 16px; line-height: 1.55; margin: 6px 0 4px; }
 .help-link.dinner .icon { background: #fbe8ea; color: #9b2c3a; }
 .help-link.cleaning .icon { background: #e6f0fa; color: #1d4e89; }
+/* the "N still needed" badge, sat over the top edge of the cleaning card */
+.help-link { position: relative; }
+.help-links { overflow: visible; }
+.need-badge { position: absolute; top: -11px; right: 14px; background: var(--danger); color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .01em; padding: 4px 11px; border-radius: 999px; box-shadow: 0 3px 10px rgba(178,44,44,0.35); white-space: nowrap; }
+.need-badge[hidden] { display: none; }
 .help-link.meals .icon { background: #e7f0e6; color: #2f5d3a; }
 /* Leaders › Dinners */
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }

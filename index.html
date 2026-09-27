@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=16">
+  <link rel="stylesheet" href="app.css?v=17">
 </head>
 <body>
   <header class="hero">
@@ -75,6 +75,7 @@
       </div>
       <nav class="help-links" aria-label="Sign-ups">
         <a class="help-link cleaning" href="cleaning.html" id="cleaning-link" hidden>
+          <span class="need-badge" id="cleaning-badge" hidden></span>
           <span class="icon" id="icon-cleaning"></span>
           <span><span class="label">Building cleaning</span><span class="sub" id="cleaning-sub">Grab a Saturday — an hour with a few friends.</span></span>
           <span class="chev" id="chev-cleaning"></span>
@@ -142,8 +143,11 @@
         const short = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
         const open = Math.max(0, next[0].spots - next[0].helpers.length);
         const days = Math.round((Date.UTC(y, m - 1, d) - new Date(today + 'T00:00:00Z').getTime()) / 864e5);
-        const when = days <= 6 ? 'this Saturday' : `Saturday ${short}`;
-        document.getElementById('cleaning-sub').textContent = open ? `${open} ${open === 1 ? 'person' : 'people'} still needed for ${when} (${short}).`.replace(` (${short}).`, days <= 6 ? ` (${short}).` : '.') : `${when} (${short}) is covered — more Saturdays inside.`.replace(` (${short})`, days <= 6 ? ` (${short})` : '');
+        const when = days <= 6 ? `this Saturday, ${short}` : `Saturday ${short}`;
+        // the red badge over the card is what people should notice: how many are still needed
+        const badge = document.getElementById('cleaning-badge');
+        badge.textContent = open ? `${open} still needed ${days <= 6 ? 'this Saturday' : short}` : ''; badge.hidden = !open;
+        document.getElementById('cleaning-sub').textContent = open ? `${open} ${open === 1 ? 'person' : 'people'} still needed for ${when} — an hour with a few friends.` : `${when.replace(/^this/, 'This')} is covered — more Saturdays inside.`;
         showCard('cleaning-link');
       }).catch(() => {});
 
