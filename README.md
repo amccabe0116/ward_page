@@ -59,11 +59,14 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    the text into the `announcements` table, and archives the email under `NPYSA/Announcements`.
    Leaders can edit the current week on the Leaders page; the home page reads the database
    first and falls back to the JSON.
-3. **Sunday night — LCR.** A second task (bound to Joseph's Mac) opens LCR's Class and Quorum
-   Attendance report in Claude's browser pane and runs `lcr-sync.js`, which refreshes the roster
-   from the page and clicks the attendance buttons for everyone who checked in on the site.
-   Rows show as *synced* on the admin page once LCR has them. Guests stay on the site only —
-   LCR's Visitors tab takes men/women totals, and the ward chose not to send those.
+3. **Sunday night — LCR.** A second task (bound to Joseph's Mac) runs the weekly sync
+   (`scripts/jobs.md` §2) in Claude's browser pane: it refreshes the roster from LCR's Class and
+   Quorum Attendance report (the only thing that marks a member active or inactive — the Members
+   tab has no switch), clicks the attendance buttons for everyone who checked in on the site,
+   then copies the four LCR reports the Leaders page reads (members without callings, members
+   moved in, sacrament headcounts, recent converts). Rows show as *synced* on the admin page once
+   LCR has them. Guests stay on the site only — LCR's Visitors tab takes men/women totals, and
+   the ward chose not to send those.
 4. **Leaders › Callings.** Three sources meet here: LCR's *Members without Callings* custom
    report (the base list — copied in by `scripts/lcr-report.js` from a signed-in LCR tab, with
    the Sunday sync), the leaders' "Members without Callings" Google Sheet (the notes: proposed

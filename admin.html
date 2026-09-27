@@ -622,7 +622,8 @@
         const box = $('members'); box.innerHTML = '';
         const active = members.filter(m => m.active).length;
         $('members-count').textContent = `${active} active · ${members.length - active} inactive`;
-        const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Calling in progress'), el('th', {}, 'Flag'), el('th', {}, '')])));
+        // active / inactive comes from the weekly LCR sync (the roster refresh deactivates anyone LCR no longer lists) — no hand switch here
+        const t = el('table', { class: 'grid members-grid' }, el('thead', {}, el('tr', {}, [el('th', {}, 'Name'), el('th', {}, 'Org'), el('th', {}, 'Sunday School'), el('th', {}, 'Status'), el('th', {}, 'Calling in progress'), el('th', {}, 'Flag')])));
         const tb = el('tbody');
         for (const m of members) {
           if (q && !m.name.toLowerCase().includes(q)) continue;
@@ -634,7 +635,6 @@
             el('td', {}, el('span', { class: 'pill ' + (m.active ? 'ok' : 'off') }, m.active ? 'active' : 'inactive')),
             el('td', { class: 'pipe-td' }, pipelineCell(m)),
             el('td', { class: 'flag-cell' }, flagCell(m)),
-            el('td', {}, el('button', { class: 'chip', onclick: async () => { await rpc('admin_set_member_active', { p_pass: pass, p_member_id: m.id, p_active: !m.active }); m.active = !m.active; renderMembers(); } }, m.active ? 'Deactivate' : 'Activate')),
           ]);
           tb.appendChild(tr);
         }

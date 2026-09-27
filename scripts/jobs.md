@@ -34,68 +34,73 @@ the email show its next 1–4 dates, leaders cancel a single date from the card.
 card sends a SimpleTexting campaign to the ward list with the post's short link (e.html?id=…) —
 same Apps Script deployment, action `remind`.
 
-## 2. Sync attendance with LCR (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
+## 2. The weekly LCR sync (needs Joseph's Mac + desktop app) — Sundays 9:30 PM ET
 
-LCR's page blocks calls to Supabase (CSP), so the sync is two halves that you shuttle between:
-`scripts/db-sync.js` (Supabase, runs in a blank tab) and `scripts/lcr-sync.js` (LCR, runs in the
-report tab). Both are on the site: https://northpointysa.com/scripts/<name>.js
+One run does four things, in this order: refresh the roster (this is the ONLY thing that marks a
+member active/inactive — there is no switch on the Leaders page), push the day's check-ins into
+LCR, copy the four LCR reports the Leaders page reads, and report back. LCR's page blocks calls
+to Supabase (CSP), so it is two halves you shuttle between: `scripts/db-sync.js` (Supabase, runs
+in a site tab) and the LCR scripts (run in the LCR tab). All are on the site:
+https://northpointysa.com/scripts/<name>.js — fetch them with curl in the cloud shell, paste the
+body into the tab with javascript_exec (turn the IIFE into `window.__fn = async function (cfg) {…}`
+so it can be called more than once).
 
 ```
-You maintain the North Point YSA attendance flow. Task: push today's site check-ins into LCR.
-Config: SUPABASE_URL=<url>, ANON_KEY=<publishable key>, PASS=<admin passphrase>.
+You maintain the North Point YSA ward site (northpointysa.com). Task: the weekly LCR sync —
+roster, today's check-ins into LCR, and the four report copies for the Leaders page.
+Config: SUPABASE_URL=<url>, ANON_KEY=<publishable key>, PASS=<admin passphrase or a leaders token>.
+Runbook: https://northpointysa.com/scripts/jobs.md §2 — follow it; the steps are:
 
-1. Open https://lcr.churchofjesuschrist.org/mlt/report/class-and-quorum-attendance?lang=eng in
-   the built-in browser pane (preview_start). Wait ~5 s, then get_page_text. If it shows the
-   Church "Sign In" page instead of "Class and Quorum Attendance", stop and tell Joseph the LCR
-   session expired: sign in in the browser pane and say "sync attendance". Never type credentials.
-2. Open a second blank tab (tabs_create) and navigate it to https://northpointysa.com/admin.html.
-3. Fetch both scripts (curl in the cloud shell works — GitHub Pages is reachable).
-4. In the site tab run db-sync with
-   window.NP_DB = { supabaseUrl, anonKey, pass, action: 'pending' };  -> note `pending` and `week`.
-   If `pending` is empty, report "nothing to push" and stop.
-5. In the LCR tab run lcr-sync with
-   window.NP_SYNC = { mode: 'push', week: <week>, pending: <pending array> };
-6. In the site tab run db-sync with { action: 'mark', ids: <synced ids from step 5> }.
-7. If `failed` is non-empty, retry step 5 once with just those. `noCell` means the person's
-   record has left the ward (or arrived after the last roster refresh) — refresh the roster
-   (below), rerun steps 4–6, and list anyone still without a cell by name.
-8. Guests: NOT sent to LCR (Joseph's call, Sept 2026 — LCR's Visitors tab only takes men/women
-   totals). Just list them in the report. If a guest's name matches a roster member, they
-   probably typed their name before the roster refresh picked them up: add them on the Leaders
-   page as that member instead and remove the guest row.
-9. Report in one paragraph: week, pushed / already marked / no cell (with names from `pending`).
+A. Open https://lcr.churchofjesuschrist.org/mlt/report/class-and-quorum-attendance?lang=eng in
+   the built-in browser pane. Wait ~5 s, get_page_text. If it shows the Church "Sign In" page
+   instead of "Class and Quorum Attendance", stop and tell Joseph the LCR session expired: sign
+   in in the browser pane and say "sync". Never type credentials.
+B. Open a second tab at https://northpointysa.com/admin.html (the site tab).
+C. ROSTER — LCR tab: lcr-sync { mode: 'roster', week, from: 0, to: 140 } then { from: 140, to: 400 };
+   site tab: collect both slices, then ONE db-sync { action: 'roster', classes, members: <all>,
+   deactivateMissing: true }. (Sending slices with deactivateMissing:true would deactivate
+   everyone not in that slice.) If it would deactivate more than ~10 people, first check
+   https://lcr.churchofjesuschrist.org/mlt/report/members-moved-out?lang=eng — they should all
+   be on it; if not, stop and ask.
+D. CHECK-INS — site tab: db-sync { action: 'pending' } → `pending`, `week`. If empty, note
+   "nothing to push" and carry on with E. LCR tab: lcr-sync { mode: 'push', week, pending,
+   clickDelayMs: 350 } (in two batches of ~60 if there are more). Site tab: db-sync
+   { action: 'mark', ids: <synced ids> }. Retry `failed` once; `noCell` = the record left the
+   ward or arrived after the roster refresh — list them by name. Guests are NOT sent to LCR
+   (LCR's Visitors tab only takes totals); if a guest's name matches a roster member, add them as
+   that member on the Leaders page and remove the guest row.
+E. REPORTS — each: run the LCR script in the LCR tab, then db-sync { action: 'sheet', key, title,
+   sourceUrl, headers, rows } in the site tab.
+   1. Members without Callings (Leaders › Callings):
+      https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/186530a9-e9f3-46ab-9981-df0e4789315e
+      wait for "Count: N", run lcr-report.js { key: 'lcr_callings', title: 'LCR: Members without Callings' }.
+   2. Members Moved In (Overview): https://lcr.churchofjesuschrist.org/mlt/report/members-moved-in?lang=eng,
+      set "Show for past" to 3 Months (a React select: set the value through the native setter and
+      dispatch change; wait ~15 s for the row count to change), run lcr-report.js
+      { key: 'lcr_moved_in', title: 'LCR: Members Moved In (past 3 months)' }; store only the
+      columns Person UUID, Name, Age, Move In Date, Prior Unit, and strip a leading "Warning" off
+      a name (LCR's record-warning icon leaks into the text).
+   3. Sacrament attendance (Overview): https://lcr.churchofjesuschrist.org/report/sacrament-attendance?lang=eng,
+      run lcr-sacrament.js (current year; in January also run it with year: <last year> and merge).
+   4. Recent converts (Overview): https://lcr.churchofjesuschrist.org/one-work/progress-record?lang=eng
+      (Covenant Path Progress, "New Members" tab — converts from the last two years), wait for the
+      cards, run lcr-converts.js → key 'lcr_converts'.
+   The leaders' Google Sheet (notes / flags) is NOT copied here — the Apps Script does that
+   every 6 hours and from "Refresh from Google Sheets" on the Callings tab.
+F. Report in one paragraph: roster (size, added / removed by name), check-ins (week, pushed /
+   already marked / no cell by name, guests), and the four report row counts. Mention if LCR's
+   sacrament headcount for the day differs from the site's check-ins.
+```
 
-Members-without-callings report — also every run (feeds Leaders › Callings):
-   LCR tab: navigate to https://lcr.churchofjesuschrist.org/mlt/report/create-a-report/custom-reports-details/186530a9-e9f3-46ab-9981-df0e4789315e
-            wait for "Count: N" at the bottom, then run scripts/lcr-report.js
-            (window.NP_REPORT = { key: 'lcr_callings', title: 'LCR: Members without Callings' })
-   site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } with that result.
-   The leaders' Google Sheet (notes) refreshes separately via the Apps Script / "refresh the sheets".
-
-Leaders › Overview feeds — also every run (two quick copies, no clicking):
-   LCR tab: navigate to https://lcr.churchofjesuschrist.org/mlt/report/members-moved-in?lang=eng,
-            set "Show for past" to 3 Months, wait for the table, run scripts/lcr-report.js
-            (window.NP_REPORT = { key: 'lcr_moved_in', title: 'LCR: Members Moved In (past 3 months)' });
-            keep only the columns Person UUID, Name, Age, Move In Date, Prior Unit (drop address/phone).
-   LCR tab: navigate to https://lcr.churchofjesuschrist.org/report/sacrament-attendance?lang=eng,
-            run scripts/lcr-sacrament.js (current year; in January also run it with year: <last year>
-            and merge the two row lists before storing).
-   LCR tab: navigate to https://lcr.churchofjesuschrist.org/one-work/progress-record?lang=eng
-            (Covenant Path Progress, "New Members" tab = converts from the last two years), wait for
-            the cards, run scripts/lcr-converts.js → key 'lcr_converts' (name, member-for, last six
-            Sundays, missed count, friends). Feeds the Overview's "Recent converts" card.
-   site tab: db-sync { action: 'sheet', key, title, sourceUrl, headers, rows } for each.
+Notes:
+- The LCR sign-in lasts under an hour; the run has to start right after Joseph signs in.
+- The push clicks LCR's own buttons: ~1 s per person; 110 people ≈ 2 minutes per batch.
+- Callings in progress (Leaders › Members / Overview, supabase/pipeline.sql) live only on the
+  site — nothing to sync. Sustaining and setting apart are recorded by hand on the Overview.
 
 (The SimpleTexting text list is NOT fed from LCR: the Apps Script's `syncTextList` adds only the
  people who ticked "agree" on the New Member Form's texting question, every 6 hours or from
  Settings → Sync now. Nothing to do here for it.)
-
-Roster refresh — do it every run, it is cheap (LCR shows ~270 people):
-   LCR tab: window.NP_SYNC = { mode: 'roster', week: <week>, from: 0, to: 140 } then { from: 140, to: 400 }
-   site tab: collect both slices in a window variable, then ONE db-sync call
-             { action: 'roster', classes, members: <all>, deactivateMissing: true }.
-   (Sending slices with deactivateMissing:true would deactivate everyone not in that slice.)
-```
 
 Notes from the 2026-09-17 run: LCR rendered the custom report's column headers as untranslated
 keys ("record.preferred.name"); lcr-report.js now maps those back to the labels the site expects.
