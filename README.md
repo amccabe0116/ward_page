@@ -15,7 +15,7 @@ contact.html        ?topic=housing | jobs — private note to ward leadership (h
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
 blind-date.html     blind dates: sign up, get paired with someone of the other gender close in age (was dinner.html)
 cleaning.html       building cleaning: the Saturdays, who's helping, put a name down (yours or someone you asked)
-meals.html          feed the missionaries: Elders / North Sisters / South Sisters, one meal per companionship per day
+meals.html          feed the missionaries: North Sisters / South Sisters, one meal per companionship per day
 terms.html          Text-list Terms of Service (required by SimpleTexting) — not linked from the site
 privacy.html        Text-list Privacy Policy (required by SimpleTexting) — not linked from the site
 keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
@@ -256,7 +256,8 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
     how many more helpers it wants.
 
 12. **Feed the missionaries** (`supabase/meals.sql`). `meals.html`: pick a companionship — the
-    Elders, the North Sisters, the South Sisters — then an open day on a calendar of the next
+    North Sisters or the South Sisters (an Elders row exists but is off; no elders serve the ward)
+    — then an open day on a calendar of the next
     `meals_days_ahead` days (42 by default); a taken day shows who has it. One booked meal per
     companionship per day. The rules are on the page and enforced by `meals_signup()`: a brother
     taking either set of sisters out names the sister coming along, and each set of sisters is fed

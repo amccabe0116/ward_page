@@ -1,7 +1,8 @@
 -- ---------------------------------------------------------------------------
--- Missionary meals: members pick a day to take the missionaries out to eat. Three companionships
--- serve the ward — the Elders, the North Sisters and the South Sisters — and each set of sisters
--- is fed inside its own area. A brother taking the sisters out brings a sister along.
+-- Missionary meals: members pick a day to take the missionaries out to eat. Two companionships
+-- serve the ward — the North Sisters and the South Sisters — and each is fed inside its own area.
+-- A brother taking the sisters out brings a sister along. (An Elders row exists, switched off, in
+-- case elders are ever assigned to the ward.)
 -- Run after schema.sql (safe to re-run).
 --
 --   missionary_meals   one row per meal: companionship + date, who, their phone, the sister coming
@@ -34,10 +35,12 @@ revoke all on public.missionary_meals from anon, authenticated;
 insert into public.settings (key, value) values
   ('meals_enabled', 'true'),
   ('meals_days_ahead', '42'),
-  ('meals_elders_on', 'true'), ('meals_elders_label', 'Elders'), ('meals_elders_area', 'anywhere in the ward'), ('meals_elders_phone', ''),
+  ('meals_elders_on', 'false'), ('meals_elders_label', 'Elders'), ('meals_elders_area', 'anywhere in the ward'), ('meals_elders_phone', ''),
   ('meals_north_on', 'true'),  ('meals_north_label', 'North Sisters'), ('meals_north_area', 'the north half of the ward'), ('meals_north_phone', ''),
   ('meals_south_on', 'true'),  ('meals_south_label', 'South Sisters'), ('meals_south_area', 'the south half of the ward'), ('meals_south_phone', '')
 on conflict (key) do nothing;
+-- no elders serve the ward (Sept 2026) — off even if an earlier run switched the row on
+update public.settings set value = 'false' where key = 'meals_elders_on';
 
 -- ---------------------------------------------------------------------------
 -- Public

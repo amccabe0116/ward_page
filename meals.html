@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Feed the missionaries · North Point YSA</title>
-  <meta name="description" content="Take the North Point YSA missionaries out to eat — pick which missionaries and a day.">
+  <meta name="description" content="Take the North Point YSA sister missionaries out to eat — pick which sisters and a day.">
   <meta name="theme-color" content="#1b2a41">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,8 +13,8 @@
   <link rel="stylesheet" href="app.css?v=16">
 </head>
 <body>
-  <!-- Missionary meals (supabase/meals.sql): three companionships — the Elders, the North Sisters
-       and the South Sisters — each with a calendar of the next few weeks; one meal per
+  <!-- Missionary meals (supabase/meals.sql): the North Sisters and the South Sisters (an Elders
+       row exists, switched off), each with a calendar of the next few weeks; one meal per
        companionship per day. A brother feeding the sisters names the sister coming along; each set
        of sisters eats inside its own area. Labels, areas, phones and the switch live on
        Leaders › Service. -->
@@ -22,13 +22,13 @@
     <a class="back" href="index.html">‹ Home</a>
     <p class="eyebrow">North Point YSA</p>
     <h1>Feed the missionaries</h1>
-    <p class="date">Pick which missionaries and a day — they’ll text you to set the time and place.</p>
+    <p class="date">Pick which sisters and a day — they’ll text you to set the time and place.</p>
   </header>
 
   <main class="wrap" id="main" hidden>
     <p class="lede">Taking the missionaries out to eat is one of the easiest ways to help the work along — and it’s a good time. Pick a companionship below, then an open day. Once you’re booked you’ll get their number.</p>
     <div class="card meals-rules">
-      <div class="rule"><b>Brothers:</b> to take either set of sisters out, bring a sister along — put her name in the form. The Elders are fine on their own.</div>
+      <div class="rule" id="rule-brothers"><b>Brothers:</b> to take the sisters out, bring a sister along — put her name in the form.</div>
       <div class="rule" id="rule-areas"><b>Sisters eat in their own area:</b> <span id="areas"></span></div>
     </div>
     <div class="chips" id="comps"></div>
@@ -85,6 +85,7 @@
         $('comp-area').textContent = comp ? (comp.sisters ? `${comp.label}: meals in ${comp.area || 'their area'}. Brothers, bring a sister along.` : `${comp.label}: ${comp.area || 'anywhere in the ward'}.`) : '';
         $('areas').textContent = info.companionships.filter(c => c.sisters).map(c => `${c.label} — ${c.area || 'their area'}`).join(' · ') || 'see each set of sisters';
         $('rule-areas').hidden = !info.companionships.some(c => c.sisters);
+        $('rule-brothers').innerHTML = '<b>Brothers:</b> to take the sisters out, bring a sister along — put her name in the form.' + (info.companionships.some(c => !c.sisters) ? ' The Elders are fine on their own.' : '');
       }
       // a month grid per month in the booking window; a taken day shows who, an open day books
       function renderCal() {
