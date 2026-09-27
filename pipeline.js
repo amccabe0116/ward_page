@@ -2,7 +2,8 @@
  * Callings in progress — for anyone on the members list (supabase/pipeline.sql).
  *
  * The steps, in the order they happen:
- *   proposed → who contacts → contacted → accepted (yes / no) → sustained → set apart
+ *   proposed → contacted → accepted (yes / no) → sustained → set apart
+ * ("who contacts" is recorded alongside, as information — not a step of its own.)
  *
  * Leaders › Members shows each member's open row as its current step + who contacts, and opens
  * an editor in that column. Leaders › Overview lists who still needs sustaining and who still
@@ -32,8 +33,8 @@ window.NPPipeline = (function () {
     if (r.accepted === 'no') return { key: 'declined', label: 'Declined', k: 'need' };
     if (r.sheet && truthy(r.answer)) return { key: 'answered', label: 'Answered: ' + (r.answer.length > 24 ? r.answer.slice(0, 22) + '…' : r.answer), k: 'need' };
     if (r.contacted_at) return { key: 'contacted', label: 'Contacted', k: 'wait', next: 'waiting on an answer' };
-    if (truthy(r.contact)) return { key: 'contact', label: 'To contact', k: 'wait', next: r.contact + ' contacts them' };
-    return { key: 'proposed', label: 'Proposed', k: 'wait', next: 'nobody assigned to contact them yet' };
+    // "who contacts" is information, not a step: assigned or not, the calling is still just proposed
+    return { key: 'proposed', label: 'Proposed', k: 'wait', next: truthy(r.contact) ? r.contact + ' contacts them' : 'nobody assigned to contact them yet' };
   }
   // The same for someone tracked only on the Members without Callings sheet (callings.js person).
   function sheetState(p) {
@@ -101,7 +102,6 @@ window.NPPipeline = (function () {
     ['all', 'Everyone', () => true],
     ['none', 'Nothing in progress', (m, st) => !st],
     ['proposed', 'Proposed', (m, st) => !!st && st.key === 'proposed'],
-    ['contact', 'To contact', (m, st) => !!st && st.key === 'contact'],
     ['contacted', 'Waiting on an answer', (m, st) => !!st && (st.key === 'contacted' || st.key === 'answered')],
     ['accepted', 'Accepted · to be sustained', (m, st) => !!st && st.key === 'accepted'],
     ['sustained', 'Sustained · to be set apart', (m, st) => !!st && st.key === 'sustained'],
@@ -118,7 +118,7 @@ window.NPPipeline = (function () {
       const st = stage(r);
       return el('button', { class: 'pipe-cell', type: 'button', title: 'Edit this calling', onclick: () => onOpen(r, null) }, [
         el('b', {}, r.calling), el('span', { class: 'pill ' + st.k }, st.label),
-        truthy(r.contact) && st.key !== 'set_apart' ? el('span', { class: 'muted' }, st.key === 'contact' ? r.contact + ' to contact' : r.contact) : null,
+        truthy(r.contact) && st.key !== 'set_apart' ? el('span', { class: 'muted' }, r.contact) : null,
       ]);
     }
     const s = NPCallings.personFor ? sheetState(NPCallings.personFor(m)) : null;

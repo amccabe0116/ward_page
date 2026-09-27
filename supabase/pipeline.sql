@@ -1,6 +1,6 @@
 -- ---------------------------------------------------------------------------
 -- Callings in progress, for anyone on the members list (not just the members-without-callings
--- sheet): proposed calling → who contacts → contacted → accepted (yes / no) → sustained → set apart.
+-- sheet): proposed calling (who contacts noted) → contacted → accepted (yes / no) → sustained → set apart.
 -- Run after schema.sql (safe to re-run).
 --
 --   calling_pipeline   one row per calling being extended. status: open while it moves along,
