@@ -141,7 +141,9 @@
         const [y, m, d] = next[0].date.split('-').map(Number);
         const short = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
         const open = Math.max(0, next[0].spots - next[0].helpers.length);
-        document.getElementById('cleaning-sub').textContent = `Next: Saturday ${short}` + (open ? ` — ${open} more ${open === 1 ? 'helper' : 'helpers'} wanted` : ' — crew’s full, more Saturdays inside');
+        const days = Math.round((Date.UTC(y, m - 1, d) - new Date(today + 'T00:00:00Z').getTime()) / 864e5);
+        const when = days <= 6 ? 'this Saturday' : `Saturday ${short}`;
+        document.getElementById('cleaning-sub').textContent = open ? `${open} ${open === 1 ? 'person' : 'people'} still needed for ${when} (${short}).`.replace(` (${short}).`, days <= 6 ? ` (${short}).` : '.') : `${when} (${short}) is covered — more Saturdays inside.`.replace(` (${short})`, days <= 6 ? ` (${short})` : '');
         showCard('cleaning-link');
       }).catch(() => {});
 
