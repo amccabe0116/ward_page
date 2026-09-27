@@ -100,7 +100,6 @@ window.NPPipeline = (function () {
   // The chips, in process order. `test` gets the member and their stage (or null).
   const GROUPS = [
     ['all', 'Everyone', () => true],
-    ['none', 'Nothing in progress', (m, st) => !st],
     ['proposed', 'Proposed', (m, st) => !!st && st.key === 'proposed'],
     ['contacted', 'Waiting on an answer', (m, st) => !!st && (st.key === 'contacted' || st.key === 'answered')],
     ['accepted', 'Accepted · to be sustained', (m, st) => !!st && st.key === 'accepted'],

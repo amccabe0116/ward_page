@@ -115,8 +115,8 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
    row (done), declined or *Withdraw* closes it as dropped. Leaders › Members has a *Calling in
    progress* column showing the open row's calling, current step and who contacts; tapping it
    opens the editor (dates default to today), *+ propose* starts one. Chips above the list filter
-   by stage — nothing in progress, proposed, waiting on an answer, accepted, sustained,
-   declined, set apart in the last 90 days — with counts. *Who contacts* is shown alongside as
+   by stage — proposed, waiting on an answer, accepted, sustained, declined, set apart in the
+   last 90 days — with counts. *Who contacts* is shown alongside as
    information; it isn't a step. Someone on the *Members
    without Callings* sheet with a proposal there but no row here shows the sheet's state (marked
    *· sheet*); tapping *Track* copies it over. The Overview merges both: tracked rows first, then
