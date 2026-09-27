@@ -356,14 +356,22 @@ window.NPPosts = (function () {
 
   // ---- the weekly email, built from the posts ----
   // o: { header, footer, site } — header/footer are plain text (URLs get linked in the HTML version).
+  // Dated posts further out than SAVE_DATE_DAYS (general conference next spring, a devotional in
+  // November) go in a "Save the date" section as one line each, so the email stays about this
+  // month; the home page still shows them in full under their month.
+  const SAVE_DATE_DAYS = 45;
   function emailSections(posts) {
     const all = expand(posts), dated = all.filter(p => p.event_date), undated = all.filter(p => !p.event_date);
-    return [['Coming up', dated], ['Announcements', undated]].filter(([, l]) => l.length);
+    const t = todayIso(); const [y, m, d] = t.split('-').map(Number);
+    const horizon = new Date(Date.UTC(y, m - 1, d + SAVE_DATE_DAYS)).toISOString().slice(0, 10);
+    const near = dated.filter(p => p.event_date <= horizon), far = dated.filter(p => p.event_date > horizon).map(p => Object.assign({}, p, { brief: true }));
+    return [['Coming up', near], ['Save the date', far], ['Announcements', undated]].filter(([, l]) => l.length);
   }
   const seriesNote = p => p.series && p.series.repeat ? ' (' + repeatLabel(p.series).replace(/^Every/, 'every') + ')' : '';
   function whenLine(p) {
     const dp = dateParts(p.event_date); if (!dp) return '';
-    return `${dp.dow}, ${dp.mon} ${dp.d}` + (timeRange(p) ? ' · ' + timeRange(p) : '');
+    const yr = p.brief && dp.y !== Number(todayIso().slice(0, 4)) ? ', ' + dp.y : '';
+    return `${dp.dow}, ${dp.mon} ${dp.d}${yr}` + (timeRange(p) ? ' · ' + timeRange(p) : '');
   }
   function emailPlain(posts, o) {
     o = o || {}; const site = o.site || 'https://northpointysa.com';
@@ -375,7 +383,7 @@ window.NPPosts = (function () {
       for (const p of list) {
         const w = whenLine(p);
         if (p.cancelled) { out.push((w ? w + ' — ' : '') + p.title + ': CANCELLED this time', ''); continue; }
-        if (p.nth > 0) { out.push((w ? w + ' — ' : '') + p.title + (p.location ? ' · ' + p.location : ''), ''); continue; }
+        if (p.nth > 0 || p.brief) { out.push((w ? w + ' — ' : '') + p.title + (p.location ? ' · ' + p.location : ''), ''); continue; }
         out.push((w ? w + ' — ' : '') + p.title + seriesNote(p));
         if (p.location) out.push('  ' + p.location);
         if (p.details) out.push(...String(p.details).trim().split('\n').map(l => '  ' + l));
@@ -404,7 +412,7 @@ window.NPPosts = (function () {
       for (const p of list) {
         const w = whenLine(p);
         if (p.cancelled) { h.push(`<p><strong>${esc((w ? w + ' — ' : '') + p.title + ': cancelled this time')}</strong></p>`); continue; }
-        if (p.nth > 0) { h.push(`<p><strong>${esc((w ? w + ' — ' : '') + p.title)}</strong>${p.location ? ' · ' + esc(p.location) : ''}</p>`); continue; }
+        if (p.nth > 0 || p.brief) { h.push(`<p><strong>${esc((w ? w + ' — ' : '') + p.title)}</strong>${p.location ? ' · ' + esc(p.location) : ''}</p>`); continue; }
         const lines = [`<strong>${esc(w ? w + ' — ' + p.title : p.title)}</strong>${esc(seriesNote(p))}`];
         if (p.location) lines.push(esc(p.location));
         if (p.details) lines.push(para(p.details));
