@@ -14,6 +14,8 @@ roll.html           ?class=sunday_school | priesthood_rs — tap your name, chec
 contact.html        ?topic=housing | jobs — private note to ward leadership (have / need)
 bishop.html         request a meeting with the Bishop (name, phone, email, temple-recommend checkbox)
 blind-date.html     blind dates: sign up, get paired with someone of the other gender close in age (was dinner.html)
+cleaning.html       building cleaning: the Saturdays, who's helping, put a name down (yours or someone you asked)
+meals.html          feed the missionaries: Elders / North Sisters / South Sisters, one meal per companionship per day
 terms.html          Text-list Terms of Service (required by SimpleTexting) — not linked from the site
 privacy.html        Text-list Privacy Policy (required by SimpleTexting) — not linked from the site
 keys.html           "The keys": a mini game — crawl the baby past the Primary presidency to the bishop (ward-wide high scores)
@@ -44,6 +46,8 @@ supabase/posts.sql                posts (events / notices with flyers), public s
 supabase/repeat.sql               repeating posts (weekly / every 2 weeks / monthly), cancelling one date
 supabase/bishop.sql               Bishop meeting requests texted to the executive secretary (claim-once + the number setting)
 supabase/dinner.sql               blind dates: sign-ups, pairs, the on/off switch (dinner_enabled) — names kept from the tool's first version
+supabase/cleaning.sql             building cleaning: cleaning_dates (each also a post) + cleaning_signups
+supabase/meals.sql                missionary meals: missionary_meals, the switch and per-companionship settings
 supabase/pipeline.sql             callings in progress for any member (calling_pipeline): proposed → contacted → accepted → sustained → set apart
 scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSON the sheets functions store
 ```
@@ -238,6 +242,29 @@ scripts/sheets_to_json.py         manual fallback: two .xlsx exports → the JSO
     `times_paired` and "waiting a while" (3 weeks) help spread the turns; the tab badge counts
     people waiting. An intro text still written for the missionary dinners is swapped for the
     blind-date wording the first time the tab loads.
+
+11. **Building cleaning** (`supabase/cleaning.sql`). Leaders › Service → *Add a Saturday* (date, time,
+    helpers wanted) makes a **post** first — so the Saturday is in the home-page lineup, the weekly
+    email, the ward calendar and can get a text reminder like any event — then the `cleaning_dates`
+    row pointing at it; *Remove Saturday* deletes both. `cleaning.html` shows a month grid with the
+    cleaning Saturdays marked, one card per date (time, helpers wanted, who's on as "First L.",
+    add-to-calendar) and a sheet that takes any name — the person's own or someone they called and
+    asked, with *Signing someone else up? Your name* recorded as `added_by`; a duplicate name on the
+    same date is refused. Leaders see full names, phones and who added whom, add names themselves,
+    and remove sign-ups. Defaults (time, helpers, location) are settings `cleaning_*`. The home
+    page's *Sign up* section shows the card whenever a Saturday is coming, with the next date and
+    how many more helpers it wants.
+
+12. **Feed the missionaries** (`supabase/meals.sql`). `meals.html`: pick a companionship — the
+    Elders, the North Sisters, the South Sisters — then an open day on a calendar of the next
+    `meals_days_ahead` days (42 by default); a taken day shows who has it. One booked meal per
+    companionship per day. The rules are on the page and enforced by `meals_signup()`: a brother
+    taking either set of sisters out names the sister coming along, and each set of sisters is fed
+    in its own area (the area text is a setting, shown on the page and in the confirmation). The
+    companionship's phone number is shown only to someone who has just booked, with a ready-made
+    text. Leaders › Service has the switch (`meals_enabled`), per-companionship on/off, label, area
+    and number, the list of upcoming meals (Done / Cancel / Delete — cancelling frees the day) and a
+    form for phone sign-ups. The home-page card shows while the switch is on.
 
 ## Security model
 

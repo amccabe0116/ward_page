@@ -192,7 +192,7 @@ window.NPPosts = (function () {
     return art;
   }
   function linkLabel(url) {
-    try { const u = new URL(url); const h = u.hostname.replace(/^www\./, ''); return /forms\.gle|docs\.google\.com\/forms|signup|rsvp/i.test(url) ? 'Sign up' : /eventbrite|meetup/i.test(h) ? 'Tickets & details' : 'More info · ' + h; }
+    try { const u = new URL(url); const h = u.hostname.replace(/^www\./, ''); return /forms\.gle|docs\.google\.com\/forms|signup|sign-up|rsvp|cleaning\.html|meals\.html/i.test(url) ? 'Sign up' : /eventbrite|meetup/i.test(h) ? 'Tickets & details' : 'More info · ' + h; }
     catch (e) { return 'More info'; }
   }
 
@@ -500,5 +500,5 @@ Ward calendar: subscribe once at https://northpointysa.com/calendar.html and eve
     footer: `Have something for the announcements? Post it at https://northpointysa.com/post.html — a leader approves it and it goes on the site and into this email.`,
   };
 
-  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, occurrences, expand, repeatLabel, rrule, sharePost, EMAIL_DEFAULTS };
+  return { card, renderPublic, form, compressImage, uploadFlyer, fmtTime, timeRange, dateParts, todayIso, emailPlain, emailHtml, downloadFlyers, zipFiles, calendarLinks, eventSpan, occurrences, expand, repeatLabel, rrule, sharePost, EMAIL_DEFAULTS, icons: { pin, clock, calendar, share } };
 })();

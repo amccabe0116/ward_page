@@ -530,7 +530,9 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .post-cal .ic svg { width: 16px; height: 16px; }
 .post-cal a { color: var(--navy); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .lede { font-size: 16px; line-height: 1.55; margin: 6px 0 4px; }
-.help-link.dinner .icon { background: #e7f0e6; color: #2f5d3a; }
+.help-link.dinner .icon { background: #fbe8ea; color: #9b2c3a; }
+.help-link.cleaning .icon { background: #e6f0fa; color: #1d4e89; }
+.help-link.meals .icon { background: #e7f0e6; color: #2f5d3a; }
 /* Leaders › Dinners */
 .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
@@ -605,3 +607,44 @@ pre.code { background: #1b2a41; color: #e6e2d8; padding: 12px; border-radius: 10
 .flyer-opt { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--card); cursor: pointer; font-size: 14px; }
 .flyer-opt input { width: 18px; height: 18px; accent-color: var(--navy); flex: none; }
 .flyer-opt img { width: 36px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); flex: none; }
+
+/* ---- Building cleaning + missionary meals (cleaning.html, meals.html) ---- */
+.mgrid-months { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin: 14px 0 18px; }
+.mgrid-month { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 12px 10px; }
+.mgrid-name { font-family: var(--serif); font-weight: 600; font-size: 16px; margin: 0 0 8px; }
+.mgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.mgrid .dow { font-size: 11px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .04em; padding-bottom: 2px; }
+.mgrid .day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 32px; border-radius: 8px; font-size: 13px; color: var(--ink); border: 0; background: transparent; font: inherit; padding: 2px 0; }
+.mgrid .day.today { box-shadow: inset 0 0 0 1.5px var(--gold); }
+.mgrid .day.off { color: #c9c4b8; }
+.mgrid button.day { cursor: pointer; }
+.mgrid .day.clean { background: var(--navy); color: #fff; font-weight: 600; }
+.mgrid .day.clean.full { background: var(--ok); }
+.mgrid .day.clean.past { background: #cfcac0; }
+.mgrid .day.open { background: #eef6e9; color: #2f6b2f; font-weight: 600; }
+.mgrid .day.open:hover { background: #d9ecd2; }
+.mgrid .day.taken { background: #f2ecdd; color: #6b4e0b; font-size: 12px; }
+.mgrid .day.taken i { font-style: normal; font-size: 9px; line-height: 1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+.mgrid.meals .day { min-height: 40px; }
+.clean-card.past { opacity: .75; }
+.clean-helpers { font-size: 14px; }
+.meals-rules { display: grid; gap: 8px; font-size: 14px; margin: 12px 0 14px; }
+.meals-rules .rule b { color: var(--navy); }
+/* the sign-up sheet on cleaning.html / meals.html */
+.sheet { position: fixed; inset: 0; z-index: 60; background: rgba(27,42,65,0.45); display: flex; align-items: flex-end; justify-content: center; padding: 0; overflow: auto; }
+.sheet[hidden] { display: none; }
+.sheet-card { position: relative; background: var(--card); border-radius: 18px 18px 0 0; padding: 18px 18px 22px; width: 100%; max-width: 560px; box-shadow: 0 -12px 40px rgba(0,0,0,0.25); max-height: 92vh; overflow: auto; }
+.sheet-card h2 { font-family: var(--serif); font-size: 21px; margin: 0 0 4px; }
+.sheet-card .muted { margin: 0 0 12px; }
+.sheet-card .inline.wrap2 > .field { flex: 1 1 140px; }
+.sheet-card .actionbar { margin-top: 6px; display: flex; gap: 8px; position: static; background: none; padding: 6px 0 0; }
+.sheet-card .actionbar .btn { width: auto; flex: 1; }
+body.sheet-open { overflow: hidden; }
+@media (min-width: 640px) { .sheet { align-items: center; padding: 24px 12px; } .sheet-card { border-radius: var(--radius); } }
+
+/* Leaders › Service */
+.cl-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.cl-list li { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.cl-list .chip.tiny { font-size: 11px; padding: 2px 8px; margin-left: 6px; }
+.ml-row .ml-on { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); padding-bottom: 10px; }
+.ml-row .field label { font-size: 12px; }

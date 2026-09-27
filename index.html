@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=15">
+  <link rel="stylesheet" href="app.css?v=16">
 </head>
 <body>
   <header class="hero">
@@ -64,13 +64,32 @@
             <span><span class="label">Meet with the Bishop</span><span class="sub">Interviews, temple recommends, or just to talk</span></span>
             <span class="chev" id="chev-bishop"></span>
           </a>
-          <a class="help-link dinner" href="blind-date.html" id="dinner-link" hidden>
-            <span class="icon" id="icon-dinner"></span>
-            <span><span class="label">Blind date</span><span class="sub">Get paired with someone in the ward close to your age — then plan the date.</span></span>
-            <span class="chev" id="chev-dinner"></span>
-          </a>
         </nav>
       </div>
+    </section>
+
+    <!-- sign-ups: building cleaning (when dates are posted), missionary meals and blind dates (when switched on) -->
+    <section aria-labelledby="serve-title" id="serve" hidden>
+      <div class="section-title">
+        <h2 id="serve-title">Sign up</h2>
+      </div>
+      <nav class="help-links" aria-label="Sign-ups">
+        <a class="help-link cleaning" href="cleaning.html" id="cleaning-link" hidden>
+          <span class="icon" id="icon-cleaning"></span>
+          <span><span class="label">Building cleaning</span><span class="sub" id="cleaning-sub">Grab a Saturday — an hour with a few friends.</span></span>
+          <span class="chev" id="chev-cleaning"></span>
+        </a>
+        <a class="help-link meals" href="meals.html" id="meals-link" hidden>
+          <span class="icon" id="icon-meals"></span>
+          <span><span class="label">Feed the missionaries</span><span class="sub">Take the Elders or the Sisters out to eat — pick a day.</span></span>
+          <span class="chev" id="chev-meals"></span>
+        </a>
+        <a class="help-link dinner" href="blind-date.html" id="dinner-link" hidden>
+          <span class="icon" id="icon-dinner"></span>
+          <span><span class="label">Blind date</span><span class="sub">Get paired with someone in the ward close to your age — then plan the date.</span></span>
+          <span class="chev" id="chev-dinner"></span>
+        </a>
+      </nav>
     </section>
 
     <section aria-labelledby="ann-title" id="happening">
@@ -90,8 +109,8 @@
   </main>
 
   <script src="config.js"></script>
-  <script src="app.js?v=3"></script>
-  <script src="posts.js?v=12"></script>
+  <script src="app.js?v=4"></script>
+  <script src="posts.js?v=13"></script>
   <script>
     (function () {
       const { el, fmtDate, linkify, escapeHtml, icons } = NP;
@@ -107,8 +126,24 @@
       document.getElementById('chev-bishop').innerHTML = icons.chevron;
       document.getElementById('icon-dinner').innerHTML = icons.dinner;
       document.getElementById('chev-dinner').innerHTML = icons.chevron;
-      // the blind-date sign-up shows only while leaders have it switched on
-      NP.rpc('dinner_status').then(s => { if (s && s.enabled) document.getElementById('dinner-link').hidden = false; }).catch(() => {});
+      document.getElementById('icon-cleaning').innerHTML = icons.broom;
+      document.getElementById('chev-cleaning').innerHTML = icons.chevron;
+      document.getElementById('icon-meals').innerHTML = icons.meal;
+      document.getElementById('chev-meals').innerHTML = icons.chevron;
+      // the sign-up cards show only when there is something to sign up for; the section shows with the first card
+      const showCard = id => { document.getElementById(id).hidden = false; document.getElementById('serve').hidden = false; };
+      NP.rpc('dinner_status').then(s => { if (s && s.enabled) showCard('dinner-link'); }).catch(() => {});
+      NP.rpc('meals_public').then(m => { if (m && m.enabled && (m.companionships || []).length) showCard('meals-link'); }).catch(() => {});
+      NP.rpc('cleaning_public').then(list => {
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: NP.C.timeZone }).format(new Date());
+        const next = (list || []).filter(d => d.date >= today);
+        if (!next.length) return;
+        const [y, m, d] = next[0].date.split('-').map(Number);
+        const short = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+        const open = Math.max(0, next[0].spots - next[0].helpers.length);
+        document.getElementById('cleaning-sub').textContent = `Next: Saturday ${short}` + (open ? ` — ${open} more ${open === 1 ? 'helper' : 'helpers'} wanted` : ' — crew’s full, more Saturdays inside');
+        showCard('cleaning-link');
+      }).catch(() => {});
 
       const links = document.getElementById('links');
       const L = NP.C.links || {};

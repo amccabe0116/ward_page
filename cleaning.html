@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Building cleaning · North Point YSA</title>
+  <meta name="description" content="The Saturdays North Point YSA cleans the building — pick one and put your name down.">
+  <meta name="theme-color" content="#1b2a41">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css?v=16">
+</head>
+<body>
+  <!-- The building-cleaning Saturdays (supabase/cleaning.sql) with who's helping, and a sign-up
+       that takes any name — your own, or someone you called and asked. Leaders add the dates on
+       Leaders › Service; each date is also a post, so it's in the lineup, the email and the ward
+       calendar. -->
+  <header class="hero compact">
+    <a class="back" href="index.html">‹ Home</a>
+    <p class="eyebrow">North Point YSA</p>
+    <h1>Building cleaning</h1>
+    <p class="date">Pick a Saturday and put your name down — or someone you’ve asked.</p>
+  </header>
+
+  <main class="wrap">
+    <p class="lede">We keep our own building clean. Each Saturday below needs a few of us for about an hour — grab one, bring a friend, and it’s done before lunch. If you called someone and they said yes, you can add them here too.</p>
+    <div id="months" class="mgrid-months"></div>
+    <div id="dates"><p class="empty">Loading…</p></div>
+    <p class="cal-hint" style="margin-top:18px"><a href="calendar.html">Subscribe to the ward calendar</a> and every cleaning Saturday lands in yours.</p>
+  </main>
+
+  <!-- the sign-up sheet for one date -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-card">
+      <h2 id="sheet-title">Sign up</h2>
+      <p class="muted" id="sheet-sub"></p>
+      <div class="field"><label for="name">Name <span class="opt">(yours, or whoever you’re signing up)</span></label><input id="name" type="text" maxlength="80" autocomplete="name"></div>
+      <div class="field"><label for="phone">Mobile number <span class="opt">(optional — for a reminder)</span></label><input id="phone" type="tel" maxlength="40" autocomplete="tel" inputmode="tel"></div>
+      <div class="field"><label for="by">Signing someone else up? Your name <span class="opt">(optional)</span></label><input id="by" type="text" maxlength="80"></div>
+      <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true"><input id="website" type="text" tabindex="-1" autocomplete="off" placeholder="Leave this empty"></div>
+      <div class="notice error" id="error" hidden></div>
+      <div class="actionbar">
+        <button class="btn" id="send">Put me down</button>
+        <button class="btn secondary" id="cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js?v=4"></script>
+  <script src="posts.js?v=13"></script>
+  <script>
+    (function () {
+      const { rpc, el } = NP;
+      const $ = id => document.getElementById(id);
+      const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: NP.C.timeZone }).format(new Date());
+      const parts = iso => { const [y, m, d] = iso.split('-').map(Number); return { y, m, d, dow: new Date(Date.UTC(y, m - 1, d)).getUTCDay() }; };
+      const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}${m ? ':' + String(m).padStart(2, '0') : ''} ${h >= 12 ? 'PM' : 'AM'}`; };
+      let dates = [], current = null;
+
+      // a small month grid for each month that has a cleaning Saturday
+      function months(list) {
+        const box = $('months'); box.innerHTML = '';
+        const byMonth = new Map();
+        for (const d of list) { const p = parts(d.date); const k = `${p.y}-${p.m}`; if (!byMonth.has(k)) byMonth.set(k, { y: p.y, m: p.m, days: new Map() }); byMonth.get(k).days.set(p.d, d); }
+        for (const mo of byMonth.values()) {
+          const first = new Date(Date.UTC(mo.y, mo.m - 1, 1)).getUTCDay(), n = new Date(Date.UTC(mo.y, mo.m, 0)).getUTCDate();
+          const cells = DAYS.map(x => el('span', { class: 'dow' }, x[0]));
+          for (let i = 0; i < first; i++) cells.push(el('span', { class: 'pad' }));
+          for (let d = 1; d <= n; d++) {
+            const iso = `${mo.y}-${String(mo.m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const cd = mo.days.get(d);
+            cells.push(cd ? el('button', { class: 'day clean' + (iso < todayIso ? ' past' : '') + (cd.helpers.length >= cd.spots ? ' full' : ''), type: 'button', title: 'Cleaning · ' + cd.helpers.length + ' of ' + cd.spots + ' helpers', onclick: () => { const c = document.querySelector(`[data-clean="${cd.id}"]`); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, String(d))
+              : el('span', { class: 'day' + (iso === todayIso ? ' today' : '') }, String(d)));
+          }
+          box.appendChild(el('div', { class: 'mgrid-month' }, [el('div', { class: 'mgrid-name' }, MONTHS[mo.m - 1] + (mo.y !== Number(todayIso.slice(0, 4)) ? ' ' + mo.y : '')), el('div', { class: 'mgrid' }, cells)]));
+        }
+      }
+      function card(d) {
+        const p = parts(d.date), past = d.date < todayIso, full = d.helpers.length >= d.spots;
+        const open = Math.max(0, d.spots - d.helpers.length);
+        const cal = d.post_id && !past ? NPPosts.calendarLinks({ id: d.post_id, title: 'Building cleaning', event_date: d.date, start_time: d.time, end_time: null, location: '' }) : null;
+        return el('article', { class: 'post clean-card' + (past ? ' past' : ''), 'data-clean': d.id }, el('div', { class: 'post-body' }, [
+          el('div', { class: 'post-when' + (d.date === todayIso ? ' soon' : '') }, [el('span', { class: 'ic', html: NPPosts.icons.clock }), `${DAYS[p.dow]}, ${MONTHS[p.m - 1].slice(0, 3)} ${p.d}` + (d.time ? ' · ' + fmtTime(d.time) : '')]),
+          el('h3', { class: 'post-title' }, past ? 'Cleaned ✓' : full ? 'Crew’s full — thank you!' : `${open} more ${open === 1 ? 'helper' : 'helpers'} wanted`),
+          d.notes ? el('div', { class: 'post-details' }, d.notes) : null,
+          el('div', { class: 'clean-helpers' }, d.helpers.length ? [el('span', { class: 'muted' }, 'On it: '), d.helpers.join(', ')] : el('span', { class: 'muted' }, past ? '' : 'Nobody yet — be the first.')),
+          !past ? el('div', { class: 'post-foot' }, [
+            cal ? el('div', { class: 'post-cal' }, [el('span', { class: 'ic', html: NPPosts.icons.calendar }), 'Add to calendar: ', el('a', { href: cal.google, target: '_blank', rel: 'noopener' }, 'Google'), ' · ', el('a', { href: cal.ics }, 'Apple / Outlook')]) : el('span'),
+            el('button', { class: 'btn small', type: 'button', onclick: () => openSheet(d) }, full ? 'Add a name anyway' : 'I’ll help'),
+          ]) : null,
+        ]));
+      }
+      function render() {
+        const box = $('dates'); box.innerHTML = '';
+        const upcoming = dates.filter(d => d.date >= todayIso), past = dates.filter(d => d.date < todayIso);
+        months(upcoming);
+        if (!upcoming.length) { box.appendChild(el('p', { class: 'empty' }, 'No cleaning Saturdays on the calendar yet — check back after the leaders post the next one.')); return; }
+        const list = el('div', { class: 'post-list' }); upcoming.forEach(d => list.appendChild(card(d))); box.appendChild(list);
+        if (past.length) { box.appendChild(el('h4', { class: 'post-month' }, 'Just done')); const pl = el('div', { class: 'post-list' }); past.forEach(d => pl.appendChild(card(d))); box.appendChild(pl); }
+      }
+      async function load() {
+        try { dates = await rpc('cleaning_public'); render(); }
+        catch (e) { $('dates').innerHTML = ''; $('dates').appendChild(el('p', { class: 'empty' }, /cleaning_public/.test(e.message) ? 'Sign-ups aren’t switched on yet (the leaders need to run supabase/cleaning.sql).' : 'Could not load the dates: ' + e.message)); }
+      }
+
+      // --- the sign-up sheet
+      const sendBtn = $('send'), errEl = $('error');
+      const fail = (msg, f) => { errEl.textContent = msg; errEl.hidden = false; if (f) f.focus(); };
+      function openSheet(d) {
+        current = d; const p = parts(d.date);
+        $('sheet-title').textContent = `${DAYS[p.dow]}, ${MONTHS[p.m - 1]} ${p.d}` + (d.time ? ' · ' + fmtTime(d.time) : '');
+        $('sheet-sub').textContent = d.helpers.length ? 'Already on it: ' + d.helpers.join(', ') : 'You’d be the first.';
+        errEl.hidden = true; $('sheet').hidden = false; document.body.classList.add('sheet-open'); setTimeout(() => $('name').focus(), 50);
+      }
+      function closeSheet() { $('sheet').hidden = true; document.body.classList.remove('sheet-open'); current = null; }
+      $('cancel').addEventListener('click', closeSheet);
+      $('sheet').addEventListener('click', e => { if (e.target === $('sheet')) closeSheet(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+      sendBtn.addEventListener('click', async () => {
+        if (!current) return;
+        errEl.hidden = true;
+        const name = $('name').value.trim(), phone = $('phone').value.trim(), by = $('by').value.trim();
+        if (name.length < 2) return fail('Whose name goes on the list?', $('name'));
+        if (phone && phone.replace(/\D/g, '').length < 10) return fail('That number doesn’t look right (it’s optional).', $('phone'));
+        sendBtn.disabled = true; sendBtn.textContent = 'Saving…';
+        try {
+          await rpc('cleaning_signup', { p_cleaning_id: current.id, p_name: name, p_phone: phone || null, p_added_by: by || null, p_website: $('website').value });
+          const d = current; closeSheet();
+          $('name').value = ''; $('phone').value = '';
+          await load();
+          NP.toast(`${name.split(' ')[0]} is on the list for ${MONTHS[parts(d.date).m - 1].slice(0, 3)} ${parts(d.date).d} — thank you!`, 4000);
+          const c = document.querySelector(`[data-clean="${d.id}"]`); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) { fail(e.message); }
+        finally { sendBtn.disabled = false; sendBtn.textContent = 'Put me down'; }
+      });
+      load();
+    })();
+  </script>
+</body>
+</html>

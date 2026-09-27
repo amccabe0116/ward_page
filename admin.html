@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="app.css?v=15">
+  <link rel="stylesheet" href="app.css?v=16">
   <style>
     .wrap { max-width: 1100px; }
     .login { max-width: 380px; margin: 40px auto; }
@@ -43,6 +43,7 @@
         <button class="tab" data-pane="callings">Callings</button>
         <button class="tab" data-pane="members">Members</button>
         <button class="tab" data-pane="dinners">Blind dates<span class="badge" id="dinner-badge" hidden></span></button>
+        <button class="tab" data-pane="service">Service</button>
         <button class="tab" data-pane="sync">LCR</button>
         <button class="tab" data-pane="settings">Settings</button>
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
@@ -195,6 +196,62 @@
         <div id="dinners"><p class="muted">Loading…</p></div>
       </section>
 
+      <!-- Service: building cleaning Saturdays (supabase/cleaning.sql) and missionary meals (supabase/meals.sql) -->
+      <section class="pane" id="pane-service">
+        <div class="card" style="margin-bottom:14px">
+          <h3 style="margin:0 0 6px">Building cleaning</h3>
+          <p class="muted" style="margin:0 0 10px">Each Saturday you add here goes on the home page, in the weekly email and the ward calendar as a post, and <code>cleaning.html</code> takes the names. Anyone can put a name down — their own or someone they called.</p>
+          <div class="inline" style="align-items:flex-end">
+            <div class="field" style="margin:0"><label for="cl-date">Add a Saturday</label><input id="cl-date" type="date"></div>
+            <div class="field" style="margin:0"><label for="cl-time">Time</label><input id="cl-time" type="time" style="max-width:130px"></div>
+            <div class="field" style="margin:0"><label for="cl-spots">Helpers wanted</label><input id="cl-spots" type="number" min="1" max="40" style="max-width:100px"></div>
+            <div class="field" style="margin:0"><button class="btn small" id="cl-add" type="button">Add</button></div>
+            <span class="muted small" id="cl-add-msg"></span>
+          </div>
+          <details style="margin-top:10px">
+            <summary class="muted">Defaults for new Saturdays</summary>
+            <div class="inline" style="margin-top:8px;align-items:flex-end">
+              <div class="field" style="margin:0"><label for="cl-def-time">Start time</label><input id="cl-def-time" type="time" style="max-width:130px"></div>
+              <div class="field" style="margin:0"><label for="cl-def-spots">Helpers wanted</label><input id="cl-def-spots" type="number" min="1" max="40" style="max-width:100px"></div>
+              <div class="field" style="margin:0;flex:1"><label for="cl-def-loc">Where (goes on the post)</label><input id="cl-def-loc" type="text" maxlength="200"></div>
+              <div class="field" style="margin:0"><button class="btn small secondary" id="cl-def-save" type="button">Save</button></div>
+              <span class="muted small" id="cl-def-msg"></span>
+            </div>
+          </details>
+          <div id="cleaning" style="margin-top:12px"><p class="muted">Loading…</p></div>
+        </div>
+        <div class="card">
+          <div class="inline" style="justify-content:space-between">
+            <h3 style="margin:0">Missionary meals</h3>
+            <label class="switch"><input type="checkbox" id="ml-enabled"><span class="knob"></span><b id="ml-enabled-label">Sign-ups are on</b></label>
+          </div>
+          <p class="muted" style="margin:8px 0 0"><code>meals.html</code>: one meal per companionship per day. A brother taking either set of sisters out names the sister coming along; each set of sisters is fed in its own area (the area text below shows on the page). The phone number is only shown to someone who has just booked.</p>
+          <details style="margin-top:10px">
+            <summary class="muted">Companionships, areas, numbers</summary>
+            <div id="ml-settings" style="margin-top:8px"></div>
+            <div class="inline" style="margin-top:6px;align-items:flex-end">
+              <div class="field" style="margin:0"><label for="ml-days">Book up to (days ahead)</label><input id="ml-days" type="number" min="7" max="120" style="max-width:110px"></div>
+              <div class="field" style="margin:0"><button class="btn small" id="ml-save" type="button">Save settings</button></div>
+              <span class="muted small" id="ml-save-msg"></span>
+            </div>
+          </details>
+          <details style="margin-top:10px">
+            <summary class="muted">Book a meal for someone (phone sign-ups)</summary>
+            <div class="inline" style="margin-top:8px;align-items:flex-end">
+              <div class="field" style="margin:0"><label for="ml-comp">Missionaries</label><select id="ml-comp"></select></div>
+              <div class="field" style="margin:0"><label for="ml-date">Day</label><input id="ml-date" type="date"></div>
+              <div class="field" style="margin:0"><label for="ml-name">Name</label><input id="ml-name" type="text" maxlength="80"></div>
+              <div class="field" style="margin:0"><label for="ml-gender">Brother / sister</label><select id="ml-gender"><option value="M">Brother</option><option value="F">Sister</option></select></div>
+              <div class="field" style="margin:0"><label for="ml-phone">Mobile</label><input id="ml-phone" type="tel" maxlength="40"></div>
+              <div class="field" style="margin:0"><label for="ml-companion">Sister along <span class="opt">(brother + sisters)</span></label><input id="ml-companion" type="text" maxlength="80"></div>
+              <div class="field" style="margin:0"><button class="btn small" id="ml-book" type="button">Book</button></div>
+              <span class="muted small" id="ml-book-msg"></span>
+            </div>
+          </details>
+          <div id="meals" style="margin-top:12px"><p class="muted">Loading…</p></div>
+        </div>
+      </section>
+
       <section class="pane" id="pane-sync">
         <div class="card">
           <h3 style="margin-top:0">How the LCR sync works</h3>
@@ -297,9 +354,9 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
   <script src="callings.js?v=23"></script>
-  <script src="posts.js?v=12"></script>
+  <script src="posts.js?v=13"></script>
   <script src="pipeline.js?v=6"></script>
   <script src="overview.js?v=2"></script>
   <script>
@@ -614,6 +671,143 @@
         } catch (e) { $('dn-save-msg').textContent = 'Not saved: ' + e.message; }
       });
       document.querySelector('.tab[data-pane=dinners]').addEventListener('click', loadDinners);
+
+      // ---- Service: building cleaning (supabase/cleaning.sql) + missionary meals (supabase/meals.sql) ----
+      const SITE = 'https://northpointysa.com';
+      const fmtDay = iso => { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); };
+      const nextSaturday = () => { const t = new Date(new Intl.DateTimeFormat('en-CA', { timeZone: C.timeZone }).format(new Date()) + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + ((6 - t.getUTCDay() + 7) % 7 || 7)); return t.toISOString().slice(0, 10); };
+      let svSettings = {}, clDates = [], mlRows = [], clShowPast = false, mlShowPast = false;
+      const COMPS = [['elders', 'Elders'], ['north', 'North Sisters'], ['south', 'South Sisters']];
+      async function loadService() {
+        try { svSettings = Object.fromEntries((await rpc('admin_get_settings', { p_pass: pass })).map(r => [r.key, r.value])); } catch (e) { svSettings = {}; }
+        // cleaning defaults
+        $('cl-def-time').value = svSettings.cleaning_time || '09:00'; $('cl-def-spots').value = svSettings.cleaning_spots || '6'; $('cl-def-loc').value = svSettings.cleaning_location || '';
+        if (!$('cl-time').value) $('cl-time').value = svSettings.cleaning_time || '09:00';
+        if (!$('cl-spots').value) $('cl-spots').value = svSettings.cleaning_spots || '6';
+        // meals settings
+        const on = (svSettings.meals_enabled || 'true') === 'true';
+        $('ml-enabled').checked = on; $('ml-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off';
+        $('ml-days').value = svSettings.meals_days_ahead || '42';
+        const ms = $('ml-settings'); ms.innerHTML = '';
+        for (const [k, dflt] of COMPS) {
+          ms.appendChild(el('div', { class: 'inline ml-row', style: 'align-items:flex-end;margin-bottom:6px' }, [
+            el('label', { class: 'ml-on' }, [el('input', { type: 'checkbox', id: 'ml-on-' + k, checked: (svSettings['meals_' + k + '_on'] || 'true') === 'true' ? '' : null }), ' on']),
+            el('div', { class: 'field', style: 'margin:0' }, [el('label', { for: 'ml-label-' + k }, 'Name'), el('input', { id: 'ml-label-' + k, type: 'text', maxlength: 40, value: svSettings['meals_' + k + '_label'] || dflt, style: 'max-width:150px' })]),
+            el('div', { class: 'field', style: 'margin:0;flex:1' }, [el('label', { for: 'ml-area-' + k }, k === 'elders' ? 'Area (optional)' : 'Their area — meals happen here'), el('input', { id: 'ml-area-' + k, type: 'text', maxlength: 120, value: svSettings['meals_' + k + '_area'] || '', placeholder: k === 'elders' ? 'anywhere in the ward' : 'e.g. Alpharetta / Milton / Cumming' })]),
+            el('div', { class: 'field', style: 'margin:0' }, [el('label', { for: 'ml-phone-' + k }, 'Their number'), el('input', { id: 'ml-phone-' + k, type: 'tel', maxlength: 40, value: svSettings['meals_' + k + '_phone'] || '', style: 'max-width:150px' })]),
+          ]));
+        }
+        const sel = $('ml-comp'); sel.innerHTML = ''; COMPS.forEach(([k, dflt]) => sel.appendChild(el('option', { value: k }, svSettings['meals_' + k + '_label'] || dflt)));
+        await Promise.all([loadCleaning(), loadMeals()]);
+      }
+      async function loadCleaning() {
+        const box = $('cleaning');
+        try { clDates = await rpc('admin_cleaning', { p_pass: pass, p_include_past: clShowPast }); }
+        catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_cleaning/.test(e.message) ? 'Run supabase/cleaning.sql in Supabase first.' : 'Could not load: ' + e.message)); return; }
+        renderCleaning();
+      }
+      function renderCleaning() {
+        const box = $('cleaning'); box.innerHTML = '';
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: C.timeZone }).format(new Date());
+        if (!$('cl-date').value) { let d = nextSaturday(); while (clDates.some(x => x.date === d)) { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + 7); d = t.toISOString().slice(0, 10); } $('cl-date').value = d; }
+        if (!clDates.length) { box.appendChild(el('p', { class: 'muted' }, 'No cleaning Saturdays yet — add the next one above.')); return; }
+        for (const d of clDates) {
+          const past = d.date < today, open = Math.max(0, d.spots - d.signups.length);
+          const addName = el('input', { type: 'text', placeholder: 'Name', maxlength: 80, class: 'edit-field', style: 'max-width:180px;font-size:14px;padding:5px 8px' });
+          const addPhone = el('input', { type: 'tel', placeholder: 'Mobile (optional)', maxlength: 40, class: 'edit-field', style: 'max-width:160px;font-size:14px;padding:5px 8px' });
+          box.appendChild(el('div', { class: 'dn-card' + (past ? ' done' : ''), 'data-clean': d.id }, [
+            el('div', { class: 'dn-name' }, [fmtDay(d.date) + (d.time ? ' · ' + NPPosts.fmtTime(d.time) : ''), el('span', { class: 'pill ' + (past ? 'off' : open ? 'wait' : 'ok') }, past ? 'done' : open ? open + ' more wanted' : 'crew full'), d.post_id ? el('span', { class: 'muted small' }, ' · post #' + d.post_id) : el('span', { class: 'pill warn' }, 'no post')]),
+            d.signups.length ? el('ul', { class: 'cl-list' }, d.signups.map(s => el('li', {}, [
+              el('b', {}, s.name), s.phone ? el('span', { class: 'muted' }, ' · ' + s.phone) : null, s.added_by ? el('span', { class: 'muted' }, ' · added by ' + s.added_by) : null,
+              el('button', { class: 'chip tiny', type: 'button', onclick: async () => { if (!confirm('Take ' + s.name + ' off ' + fmtDay(d.date) + '?')) return; try { await rpc('admin_cleaning_signup_delete', { p_pass: pass, p_id: s.id }); await loadCleaning(); } catch (e) { toast('Failed: ' + e.message, 4000); } } }, 'Remove'),
+            ]))) : el('p', { class: 'muted small', style: 'margin:4px 0' }, 'Nobody signed up yet.'),
+            !past ? el('div', { class: 'dn-actions', style: 'align-items:center' }, [
+              addName, addPhone,
+              el('button', { class: 'chip ok', type: 'button', onclick: async e => { const n = addName.value.trim(); if (n.length < 2) { addName.focus(); return; } e.currentTarget.disabled = true; try { await rpc('cleaning_signup', { p_cleaning_id: d.id, p_name: n, p_phone: addPhone.value.trim() || null, p_added_by: 'Leaders', p_website: '' }); toast(n + ' added'); await loadCleaning(); } catch (err) { e.currentTarget.disabled = false; toast('Not added: ' + err.message, 4000); } } }, 'Add someone'),
+              el('button', { class: 'chip danger', type: 'button', style: 'margin-left:auto', onclick: async () => { if (!confirm('Remove ' + fmtDay(d.date) + ' from the calendar? Its sign-ups and its post go too.')) return; try { const postId = await rpc('admin_cleaning_delete', { p_pass: pass, p_id: d.id }); if (postId) { try { await rpc('admin_post_delete', { p_pass: pass, p_id: postId }); } catch (e) { /* post already gone */ } pingCalendar(); } await loadCleaning(); } catch (e) { toast('Failed: ' + e.message, 4000); } } }, 'Remove Saturday'),
+            ]) : null,
+          ]));
+        }
+        box.appendChild(el('p', { class: 'muted small' }, [clShowPast ? 'Showing past Saturdays too. ' : '', el('button', { class: 'chip tiny', type: 'button', onclick: () => { clShowPast = !clShowPast; loadCleaning(); } }, clShowPast ? 'Hide past' : 'Show past Saturdays')]));
+      }
+      $('cl-add').addEventListener('click', async () => {
+        const date = $('cl-date').value, time = $('cl-time').value || null, spots = parseInt($('cl-spots').value, 10) || 6, msg = $('cl-add-msg');
+        if (!date) { msg.textContent = 'Pick the Saturday.'; return; }
+        if (new Date(date + 'T00:00:00Z').getUTCDay() !== 6 && !confirm(fmtDay(date) + ' isn’t a Saturday — add it anyway?')) return;
+        $('cl-add').disabled = true; msg.textContent = 'Adding…';
+        try {
+          // the post first (lineup, email, calendar, reminders), then the date that points at it
+          const loc = svSettings.cleaning_location || '';
+          const postId = await rpc('admin_post_save', { p_pass: pass, p_id: null, p_title: 'Building cleaning', p_details: `Help clean our building — about an hour, ${spots} of us wanted. Put your name down (or someone you asked): ${SITE}/cleaning.html`, p_event_date: date, p_start_time: time, p_end_time: null, p_location: loc || null, p_link: SITE + '/cleaning.html', p_flyer_url: null, p_by: null });
+          await rpc('admin_cleaning_save', { p_pass: pass, p_id: null, p_date: date, p_time: time, p_spots: spots, p_post_id: postId, p_notes: null });
+          msg.textContent = ''; $('cl-date').value = ''; toast(fmtDay(date) + ' added — it’s on the home page and going into the calendar');
+          pingCalendar(); await loadCleaning();
+        } catch (e) { msg.textContent = /admin_cleaning/.test(e.message) ? 'Run supabase/cleaning.sql first.' : 'Not added: ' + e.message; }
+        finally { $('cl-add').disabled = false; }
+      });
+      $('cl-def-save').addEventListener('click', async () => {
+        const msg = $('cl-def-msg'); msg.textContent = 'Saving…';
+        try {
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'cleaning_time', p_value: $('cl-def-time').value || '09:00' });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'cleaning_spots', p_value: String(parseInt($('cl-def-spots').value, 10) || 6) });
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'cleaning_location', p_value: $('cl-def-loc').value.trim() });
+          msg.textContent = 'Saved.'; $('cl-time').value = $('cl-def-time').value; $('cl-spots').value = $('cl-def-spots').value; svSettings.cleaning_location = $('cl-def-loc').value.trim();
+        } catch (e) { msg.textContent = 'Not saved: ' + e.message; }
+      });
+      async function loadMeals() {
+        const box = $('meals');
+        try { mlRows = await rpc('admin_meals', { p_pass: pass, p_include_past: mlShowPast }); }
+        catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'notice' }, /admin_meals/.test(e.message) ? 'Run supabase/meals.sql in Supabase first.' : 'Could not load: ' + e.message)); return; }
+        renderMeals();
+      }
+      function renderMeals() {
+        const box = $('meals'); box.innerHTML = '';
+        const label = k => svSettings['meals_' + k + '_label'] || (COMPS.find(c => c[0] === k) || [])[1] || k;
+        const open = mlRows.filter(m => m.status === 'booked'), rest = mlRows.filter(m => m.status !== 'booked');
+        if (!mlRows.length) box.appendChild(el('p', { class: 'muted' }, 'No meals booked yet.'));
+        const st = (m, to) => async () => { try { await rpc('admin_meal_status', { p_pass: pass, p_id: m.id, p_status: to }); await loadMeals(); } catch (e) { toast('Failed: ' + e.message, 4000); } };
+        const row = m => el('div', { class: 'dn-card ' + (m.status === 'booked' ? '' : 'done') }, [
+          el('div', { class: 'dn-name' }, [fmtDay(m.meal_date) + ' · ' + label(m.companionship), el('span', { class: 'pill ' + (m.status === 'booked' ? 'ok' : 'off') }, m.status)]),
+          el('div', { class: 'dn-meta' }, [el('b', {}, m.name), ' (' + (m.gender === 'M' ? 'brother' : 'sister') + ') · ', el('a', { href: 'tel:' + String(m.phone).replace(/\D/g, '') }, m.phone), m.companion ? ' · with ' + m.companion : '', m.notes ? ' · “' + m.notes + '”' : '']),
+          el('div', { class: 'dn-actions' }, [
+            m.status === 'booked' ? el('button', { class: 'chip ok', type: 'button', onclick: st(m, 'done') }, 'Done') : el('button', { class: 'chip', type: 'button', onclick: st(m, 'booked') }, 'Back to booked'),
+            m.status === 'booked' ? el('button', { class: 'chip', type: 'button', onclick: () => { if (confirm('Cancel this meal? The day opens up again.')) st(m, 'cancelled')(); } }, 'Cancel') : null,
+            el('button', { class: 'chip danger', type: 'button', onclick: async () => { if (!confirm('Delete this booking for good?')) return; try { await rpc('admin_meal_delete', { p_pass: pass, p_id: m.id }); await loadMeals(); } catch (e) { toast('Failed: ' + e.message, 4000); } } }, 'Delete'),
+          ]),
+        ]);
+        open.forEach(m => box.appendChild(row(m)));
+        if (rest.length) { box.appendChild(el('h4', { class: 'post-month' }, 'Done / cancelled')); rest.forEach(m => box.appendChild(row(m))); }
+        box.appendChild(el('p', { class: 'muted small' }, el('button', { class: 'chip tiny', type: 'button', onclick: () => { mlShowPast = !mlShowPast; loadMeals(); } }, mlShowPast ? 'Hide older' : 'Show older meals')));
+      }
+      $('ml-enabled').addEventListener('change', async () => {
+        const on = $('ml-enabled').checked;
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_enabled', p_value: on ? 'true' : 'false' }); svSettings.meals_enabled = on ? 'true' : 'false'; $('ml-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off'; toast(on ? 'Meal sign-ups are on' : 'Meal sign-ups are off — meals.html says so'); }
+        catch (e) { $('ml-enabled').checked = !on; toast('Not saved: ' + e.message, 4000); }
+      });
+      $('ml-save').addEventListener('click', async () => {
+        const msg = $('ml-save-msg'); msg.textContent = 'Saving…';
+        try {
+          const days = parseInt($('ml-days').value, 10); if (isNaN(days) || days < 7 || days > 120) throw new Error('days ahead: 7–120');
+          await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_days_ahead', p_value: String(days) });
+          for (const [k] of COMPS) {
+            await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_' + k + '_on', p_value: $('ml-on-' + k).checked ? 'true' : 'false' });
+            await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_' + k + '_label', p_value: $('ml-label-' + k).value.trim() || k });
+            await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_' + k + '_area', p_value: $('ml-area-' + k).value.trim() });
+            await rpc('admin_set_setting', { p_pass: pass, p_key: 'meals_' + k + '_phone', p_value: $('ml-phone-' + k).value.trim() });
+          }
+          msg.textContent = 'Saved.'; await loadService();
+        } catch (e) { msg.textContent = 'Not saved: ' + e.message; }
+      });
+      $('ml-book').addEventListener('click', async () => {
+        const msg = $('ml-book-msg'); msg.textContent = 'Booking…'; $('ml-book').disabled = true;
+        try {
+          const r = await rpc('meals_signup', { p_companionship: $('ml-comp').value, p_date: $('ml-date').value || null, p_name: $('ml-name').value.trim(), p_gender: $('ml-gender').value, p_phone: $('ml-phone').value.trim(), p_companion: $('ml-companion').value.trim() || null, p_notes: null, p_website: '' });
+          msg.textContent = 'Booked' + (r && r.phone ? ' — give them ' + r.phone : '') + '.'; ['ml-name', 'ml-phone', 'ml-companion', 'ml-date'].forEach(id => { $(id).value = ''; });
+          await loadMeals();
+        } catch (e) { msg.textContent = e.message; }
+        finally { $('ml-book').disabled = false; }
+      });
+      document.querySelector('.tab[data-pane=service]').addEventListener('click', loadService);
 
       // ---- members ----
       async function loadMembers() {
