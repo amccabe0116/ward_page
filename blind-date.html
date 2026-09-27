@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Dinner with the missionaries · North Point YSA</title>
+  <title>Blind date · North Point YSA</title>
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#1b2a41">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231b2a41'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='%23e2c377' font-family='Georgia'>N</text></svg>">
@@ -13,22 +13,23 @@
   <link rel="stylesheet" href="app.css?v=15">
 </head>
 <body>
-  <!-- Sign up to take the missionaries to dinner. Leaders pair each person with someone of the
-       other gender close in age; the two of them plan the meal out with the missionaries. The whole
-       thing switches on and off from Leaders › Dinners (setting dinner_enabled). -->
+  <!-- Blind dates. Sign up; leaders pair each person with someone of the other gender close in
+       age; the two of them get a text with each other's number and plan the date. The whole thing
+       switches on and off from Leaders › Blind dates (setting dinner_enabled — the database keeps
+       the names from the tool's first version, "dinner with the missionaries"). -->
   <header class="hero compact">
     <a class="back" href="index.html">‹ Home</a>
     <p class="eyebrow">North Point YSA</p>
-    <h1>Dinner with the missionaries</h1>
-    <p class="date">Sign up, get paired with someone, take the missionaries out to eat.</p>
+    <h1>Blind date</h1>
+    <p class="date">Sign up, get paired with someone in the ward, go on a date.</p>
   </header>
 
   <main class="wrap" id="main" hidden>
-    <p class="lede">Here’s how it works: sign up below, and we’ll pair you with someone in the ward of the opposite gender — a random match, close to your age. The two of you pick a night, and take the missionaries out for a meal. Good food, a new friend, and the missionaries fed. Everybody wins.</p>
+    <p class="lede">Here’s how it works: sign up below, and we’ll pair you with someone in the ward of the opposite gender — a random match, close to your age. You both get a text with the other’s name and number; the two of you pick a night and plan the date. Low stakes, new friend, maybe more.</p>
 
     <div class="private">
       <span class="ic" id="share-icon"></span>
-      <span><b>What gets shared.</b> Your match gets your first name and phone number so you can plan the night; the missionaries get your names. Nothing else goes anywhere.</span>
+      <span><b>What gets shared.</b> Your match gets your first name and phone number so you can plan the night. Nothing else goes anywhere, and the leaders who do the pairing are the only other people who see your sign-up.</span>
     </div>
 
     <div class="field">
@@ -54,12 +55,12 @@
       <input id="email" type="email" maxlength="120" autocomplete="email" inputmode="email">
     </div>
     <div class="field">
-      <label for="availability">Best nights for dinner <span class="opt">(optional)</span></label>
+      <label for="availability">Best nights for a date <span class="opt">(optional)</span></label>
       <input id="availability" type="text" maxlength="300" placeholder="Weeknights after 7, most Saturdays…">
     </div>
     <div class="field">
-      <label for="notes">Anything your match or the missionaries should know? <span class="opt">(optional)</span></label>
-      <textarea id="notes" rows="3" maxlength="600" placeholder="Happy to drive, know a great taco place, no seafood please…"></textarea>
+      <label for="notes">Anything your match should know? <span class="opt">(optional)</span></label>
+      <textarea id="notes" rows="3" maxlength="600" placeholder="Happy to drive, love mini golf, no seafood please…"></textarea>
     </div>
     <div style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true"><input id="website" type="text" tabindex="-1" autocomplete="off" placeholder="Leave this empty"></div>
 
@@ -72,13 +73,13 @@
   <main class="wrap" id="closed" hidden>
     <div class="card" style="text-align:center;padding:28px 20px">
       <h2 style="margin:0 0 8px">Sign-ups are closed right now</h2>
-      <p class="muted" style="margin:0 0 16px">The missionary dinners aren’t running at the moment — watch the announcements for the next round.</p>
+      <p class="muted" style="margin:0 0 16px">Blind dates aren’t running at the moment — watch the announcements for the next round.</p>
       <a class="btn secondary" href="index.html" style="text-decoration:none">Back to the home page</a>
     </div>
   </main>
 
   <script src="config.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     (function () {
       const { rpc, el, icons } = NP;
@@ -86,7 +87,7 @@
       $('share-icon').innerHTML = icons.lock;
       const sendBtn = $('send'), errEl = $('error');
       function fail(msg, focusEl) { errEl.textContent = msg; errEl.hidden = false; if (focusEl) focusEl.focus(); errEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-      // the switch: Leaders › Dinners
+      // the switch: Leaders › Blind dates
       rpc('dinner_status').then(s => { if (s && s.enabled) $('main').hidden = false; else $('closed').hidden = false; })
         .catch(() => { $('closed').hidden = false; });
 
@@ -105,7 +106,7 @@
           const view = el('div', { class: 'success' }, [
             el('div', { class: 'check', html: icons.check }),
             el('h2', {}, 'You’re in'),
-            el('p', {}, 'Thanks, ' + name.split(' ')[0] + '. Once you’re paired you’ll get a text with your match’s name and number — then pick a night and take the missionaries out.'),
+            el('p', {}, 'Thanks, ' + name.split(' ')[0] + '. Once you’re paired you’ll get a text with your match’s name and number — then pick a night and plan the date.'),
             el('a', { class: 'btn', href: 'index.html', style: 'text-decoration:none' }, 'Back to home'),
           ]);
           document.body.appendChild(view); window.scrollTo(0, 0);

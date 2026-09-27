@@ -42,7 +42,7 @@
         <button class="tab" data-pane="announcements">Announcements<span class="badge" id="posts-badge" hidden></span></button>
         <button class="tab" data-pane="callings">Callings</button>
         <button class="tab" data-pane="members">Members</button>
-        <button class="tab" data-pane="dinners">Dinners<span class="badge" id="dinner-badge" hidden></span></button>
+        <button class="tab" data-pane="dinners">Blind dates<span class="badge" id="dinner-badge" hidden></span></button>
         <button class="tab" data-pane="sync">LCR</button>
         <button class="tab" data-pane="settings">Settings</button>
         <button class="tab" id="logout" style="margin-left:auto">Lock</button>
@@ -175,21 +175,20 @@
       </section>
 
       <!-- LCR sync -->
-      <!-- Dinner with the missionaries: sign-ups → pairs (supabase/dinner.sql) -->
+      <!-- Blind dates: sign-ups → pairs (supabase/dinner.sql — the database keeps the tool's original "dinner" names) -->
       <section class="pane" id="pane-dinners">
         <div class="card" style="margin-bottom:14px">
           <div class="inline" style="justify-content:space-between">
             <label class="switch"><input type="checkbox" id="dn-enabled"><span class="knob"></span><b id="dn-enabled-label">Sign-ups are off</b></label>
             <span class="muted" id="dn-switch-msg"></span>
           </div>
-          <p class="muted" style="margin:8px 0 0">The switch for the whole thing. On: <code>dinner.html</code> takes sign-ups and the home page shows the card. Off: the page says sign-ups are closed, the card disappears, and nothing here changes — pairs already in motion carry on.</p>
+          <p class="muted" style="margin:8px 0 0">The switch for the whole thing. On: <code>blind-date.html</code> takes sign-ups and the home page shows the card. Off: the page says sign-ups are closed, the card disappears, and nothing here changes — pairs already in motion carry on.</p>
           <details style="margin-top:10px">
             <summary class="muted">Pairing settings and the intro text</summary>
             <div class="inline" style="margin-top:8px">
               <div class="field" style="margin:0"><label for="dn-gap">Age gap for a match <span class="opt">(years, either way)</span></label><input id="dn-gap" type="number" min="0" max="15" style="max-width:110px"></div>
-              <div class="field" style="margin:0;flex:1"><label for="dn-missionaries">Missionaries’ contact <span class="opt">(goes into the intro text)</span></label><input id="dn-missionaries" type="text" maxlength="200" placeholder="Elders 470-555-0123 · Sisters 470-555-0124"></div>
             </div>
-            <div class="field"><label for="dn-sms">Intro text to each person once paired <span class="opt">{first} = their first name · {other} = their match · {other_phone} · {missionaries}</span></label><textarea id="dn-sms" rows="3"></textarea></div>
+            <div class="field"><label for="dn-sms">Intro text to each person once paired <span class="opt">{first} = their first name · {other} = their match · {other_phone}</span></label><textarea id="dn-sms" rows="3"></textarea></div>
             <div class="inline"><button class="btn small" id="dn-save">Save settings</button><span class="muted" id="dn-save-msg"></span></div>
           </details>
         </div>
@@ -298,7 +297,7 @@
   </div>
 
   <script src="config.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script src="callings.js?v=23"></script>
   <script src="posts.js?v=12"></script>
   <script src="pipeline.js?v=6"></script>
@@ -433,10 +432,11 @@
         try { await navigator.clipboard.writeText(lines.join('\n')); toast('Summary copied'); } catch (e) { prompt('Copy:', lines.join('\n')); }
       });
 
-      // ---- Dinner with the missionaries (supabase/dinner.sql) ----
+      // ---- Blind dates (supabase/dinner.sql — the tables and settings keep the tool's original "dinner" names) ----
       // Sign-ups wait; a leader pairs each with a random person of the other gender within the age gap
       // (or picks someone), sends both the intro text, then marks the pair scheduled / done. Cancel puts
       // both back in the pool. The switch at the top is the setting dinner_enabled.
+      const DN_INTRO_DEFAULT = 'Hi {first}! You’ve been set up on a blind date with {other} — text them at {other_phone} to pick a night that works for you both. Have fun! — North Point YSA';
       let dnSignups = [], dnPairs = [], dnSettings = {}, dnProposal = null, dnShowClosed = false;
       const GENDER = { M: 'Man', F: 'Woman' };
       const firstName = n => String(n || '').trim().split(/\s+/)[0];
@@ -452,8 +452,10 @@
         const on = dnSettings.dinner_enabled === 'true';
         $('dn-enabled').checked = on; $('dn-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off';
         if (document.activeElement !== $('dn-gap')) $('dn-gap').value = dnSettings.dinner_age_gap || '3';
-        if (document.activeElement !== $('dn-missionaries')) $('dn-missionaries').value = dnSettings.dinner_missionary_contact || '';
-        if (document.activeElement !== $('dn-sms')) $('dn-sms').value = dnSettings.dinner_intro_sms || '';
+        // the first version of this tool was "dinner with the missionaries": an intro text still written for
+        // that is swapped for the blind-date one, once (edit it under Pairing settings afterwards)
+        if (/missionar/i.test(dnSettings.dinner_intro_sms || '')) { try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_intro_sms', p_value: DN_INTRO_DEFAULT }); dnSettings.dinner_intro_sms = DN_INTRO_DEFAULT; toast('Intro text updated for blind dates — see Pairing settings'); } catch (e) { /* next load */ } }
+        if (document.activeElement !== $('dn-sms')) $('dn-sms').value = dnSettings.dinner_intro_sms || DN_INTRO_DEFAULT;
         renderDinners();
       }
       const dnGap = () => { const g = parseInt(dnSettings.dinner_age_gap, 10); return isNaN(g) ? 3 : g; };
@@ -487,7 +489,7 @@
         // 1. waiting
         section('Waiting to be paired', waiting.length, waiting.length ? 'wait' : 'off');
         const men = waiting.filter(s => s.gender === 'M').length, women = waiting.length - men;
-        box.appendChild(el('p', { class: 'muted small', style: 'margin:0 0 10px' }, waiting.length ? `${men} ${men === 1 ? 'man' : 'men'} · ${women} ${women === 1 ? 'woman' : 'women'} · a match is someone of the other gender within ${dnGap()} years` + (waiting.length > 1 ? '' : '') : 'Nobody waiting.' + (dnSettings.dinner_enabled === 'true' ? ' Sign-ups are open at dinner.html.' : ' Flip the switch above to open sign-ups.')));
+        box.appendChild(el('p', { class: 'muted small', style: 'margin:0 0 10px' }, waiting.length ? `${men} ${men === 1 ? 'man' : 'men'} · ${women} ${women === 1 ? 'woman' : 'women'} · a match is someone of the other gender within ${dnGap()} years` + (waiting.length > 1 ? '' : '') : 'Nobody waiting.' + (dnSettings.dinner_enabled === 'true' ? ' Sign-ups are open at blind-date.html.' : ' Flip the switch above to open sign-ups.')));
         if (waiting.length >= 2 && waiting.some(s => candidatesFor(s).list.length)) box.appendChild(el('div', { class: 'inline', style: 'margin:0 0 10px' }, [el('button', { class: 'btn small', type: 'button', onclick: autoPairAll }, 'Pair everyone I can'), el('span', { class: 'muted small' }, 'random matches within the age gap — you still send the texts')]));
         const grid = el('div', { class: 'dn-grid' });
         for (const s of waiting) {
@@ -541,8 +543,10 @@
       async function autoPairAll() {
         const waiting = () => dnSignups.filter(s => s.status === 'waiting');
         let made = 0;
-        // shuffle, pair each still-waiting person with a random candidate, prefer real matches over stretches
-        const order = waiting().sort(() => Math.random() - 0.5);
+        // the people with the fewest possible matches go first (so someone whose only match is Bob isn't
+        // left out because Bob got paired earlier), ties shuffled; each gets a random candidate, real
+        // matches only (no stretches)
+        const order = waiting().map(s => ({ s, n: candidatesFor(s).list.length, r: Math.random() })).sort((a, b) => a.n - b.n || a.r - b.r).map(x => x.s);
         for (const s of order) {
           if (dnById(s.id).status !== 'waiting') continue;
           const c = candidatesFor(dnById(s.id)); if (!c.list.length || c.stretch) continue;
@@ -555,11 +559,11 @@
         const a = dnById(p.a_id), b = dnById(p.b_id);
         if (!a || !b) return el('div', { class: 'dn-card' }, el('div', { class: 'dn-meta' }, 'Pair #' + p.id + ' · ' + p.status + ' (a sign-up was deleted)'));
         const openP = ['proposed', 'notified', 'scheduled'].includes(p.status);
-        const status = { proposed: 'Paired — texts not sent yet', notified: 'Texts sent ' + (p.notified_at ? whenShort(p.notified_at) : ''), scheduled: 'Dinner ' + (p.meal_date ? new Date(p.meal_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'scheduled'), done: 'Done' + (p.meal_date ? ' · ' + p.meal_date : ''), cancelled: 'Cancelled' }[p.status];
+        const status = { proposed: 'Paired — texts not sent yet', notified: 'Texts sent ' + (p.notified_at ? whenShort(p.notified_at) : ''), scheduled: 'Date night ' + (p.meal_date ? new Date(p.meal_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'set'), done: 'Done' + (p.meal_date ? ' · ' + p.meal_date : ''), cancelled: 'Cancelled' }[p.status];
         const st = (to, extra) => async () => { try { await rpc('admin_dinner_pair_status', Object.assign({ p_pass: pass, p_id: p.id, p_status: to }, extra || {})); await loadDinners(); } catch (e) { toast('Failed: ' + e.message, 4000); } };
         const actions = !openP ? [] : [
           p.status === 'proposed' ? el('button', { class: 'btn small', type: 'button', onclick: e => sendIntro(p, a, b, e.currentTarget) }, 'Send both the intro text') : el('button', { class: 'chip', type: 'button', onclick: e => sendIntro(p, a, b, e.currentTarget) }, 'Send the texts again'),
-          p.status !== 'scheduled' ? el('button', { class: 'chip', type: 'button', onclick: () => { const d = prompt('Dinner date (YYYY-MM-DD)?', p.meal_date || ''); if (d === null) return; if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('Use YYYY-MM-DD'); return; } st('scheduled', { p_meal_date: d })(); } }, 'Scheduled…') : null,
+          p.status !== 'scheduled' ? el('button', { class: 'chip', type: 'button', onclick: () => { const d = prompt('When is the date (YYYY-MM-DD)?', p.meal_date || ''); if (d === null) return; if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('Use YYYY-MM-DD'); return; } st('scheduled', { p_meal_date: d })(); } }, 'Scheduled…') : null,
           el('button', { class: 'chip ok', type: 'button', onclick: st('done') }, 'Done'),
           el('button', { class: 'chip danger', type: 'button', onclick: () => { if (confirm('Cancel this pair? Both go back to waiting.')) st('cancelled')(); } }, 'Cancel pair'),
         ];
@@ -571,15 +575,15 @@
       }
       // The intro text to each of them, through the single-number path the other texts use.
       function introText(me, other) {
-        const t = dnSettings.dinner_intro_sms || 'Hi {first}! You\'re taking the missionaries to dinner with {other} — text them at {other_phone} to pick a night, then set it up with the missionaries ({missionaries}). Thanks for signing up! — North Point YSA';
-        return t.replace(/\{first\}/g, firstName(me.name)).replace(/\{other\}/g, shortName(other.name)).replace(/\{other_phone\}/g, fmtPhone(other.phone)).replace(/\{missionaries\}/g, dnSettings.dinner_missionary_contact || 'ask the ward mission leader for their number');
+        const t = dnSettings.dinner_intro_sms || DN_INTRO_DEFAULT;
+        return t.replace(/\{first\}/g, firstName(me.name)).replace(/\{other\}/g, shortName(other.name)).replace(/\{other_phone\}/g, fmtPhone(other.phone));
       }
       async function sendIntro(p, a, b, btn) {
         if (!C.sheetsRefreshUrl) { toast('Texting needs the Google script web app (config.js)', 4000); return; }
         const ta = introText(a, b), tb = introText(b, a);
         if (!confirm('Send these two texts?\n\nTo ' + a.name + ' (' + fmtPhone(a.phone) + '):\n' + ta + '\n\nTo ' + b.name + ' (' + fmtPhone(b.phone) + '):\n' + tb)) return;
         btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending…';
-        const send = (who, text) => fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: who.name, phone: who.phone, email: '', flag: 'dinner', sms: text }) }).then(x => x.json());
+        const send = (who, text) => fetch(C.sheetsRefreshUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'notify', pass, name: who.name, phone: who.phone, email: '', flag: 'date', sms: text }) }).then(x => x.json());
         try {
           const [ra, rb] = await Promise.all([send(a, ta), send(b, tb)]);
           const bad = [ra.sms !== 'sent' ? a.name + ' (' + (ra.error || ra.sms) + ')' : '', rb.sms !== 'sent' ? b.name + ' (' + (rb.error || rb.sms) + ')' : ''].filter(Boolean);
@@ -597,7 +601,7 @@
       }
       $('dn-enabled').addEventListener('change', async () => {
         const on = $('dn-enabled').checked; $('dn-switch-msg').textContent = 'Saving…';
-        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_enabled', p_value: on ? 'true' : 'false' }); dnSettings.dinner_enabled = on ? 'true' : 'false'; $('dn-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off'; $('dn-switch-msg').textContent = on ? 'On — dinner.html is taking sign-ups and the home page shows the card.' : 'Off — the page says sign-ups are closed.'; renderDinners(); }
+        try { await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_enabled', p_value: on ? 'true' : 'false' }); dnSettings.dinner_enabled = on ? 'true' : 'false'; $('dn-enabled-label').textContent = on ? 'Sign-ups are on' : 'Sign-ups are off'; $('dn-switch-msg').textContent = on ? 'On — blind-date.html is taking sign-ups and the home page shows the card.' : 'Off — the page says sign-ups are closed.'; renderDinners(); }
         catch (e) { $('dn-enabled').checked = !on; $('dn-switch-msg').textContent = 'Not saved: ' + e.message; }
       });
       $('dn-save').addEventListener('click', async () => {
@@ -605,7 +609,6 @@
         if (isNaN(gap) || gap < 0 || gap > 15) { $('dn-save-msg').textContent = 'Age gap: 0–15 years.'; return; }
         try {
           await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_age_gap', p_value: String(gap) });
-          await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_missionary_contact', p_value: $('dn-missionaries').value.trim() });
           await rpc('admin_set_setting', { p_pass: pass, p_key: 'dinner_intro_sms', p_value: $('dn-sms').value.trim() });
           $('dn-save-msg').textContent = 'Saved.'; await loadDinners();
         } catch (e) { $('dn-save-msg').textContent = 'Not saved: ' + e.message; }

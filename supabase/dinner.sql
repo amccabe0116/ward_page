@@ -1,12 +1,13 @@
 -- ---------------------------------------------------------------------------
--- Dinner with the missionaries ("get to know you"): people sign up, leaders pair each one with a
--- random person of the other gender close in age, the two plan a meal out with the missionaries.
+-- Blind dates: people sign up, leaders pair each one with a random person of the other gender
+-- close in age, both get a text with the other's number and plan the date. (The tool started life
+-- as "dinner with the missionaries" — the table, function and setting names keep that word.)
 -- Run once after schema.sql (safe to re-run).
 --
 --   dinner_signups   one row per sign-up (waiting → paired → done, or withdrawn)
 --   dinner_pairs     a match: proposed → notified (intro texts sent) → scheduled → done, or cancelled
 --   settings         dinner_enabled ('true'/'false' — the switch), dinner_age_gap (years, default 3),
---                    dinner_missionary_contact (goes into the intro text), dinner_intro_sms (wording)
+--                    dinner_intro_sms (the text each person gets once paired)
 --
 -- Public key: dinner_status() (is it on?) and dinner_signup(...) (refused while off). Everything
 -- else needs the Leaders session. Pairing itself happens on the Leaders page; the database only
@@ -20,7 +21,7 @@ create table if not exists public.dinner_signups (
   phone         text not null,
   email         text,
   availability  text,                       -- "weeknights after 7, most Saturdays"
-  notes         text,                       -- anything the missionaries / their match should know
+  notes         text,                       -- anything their match should know
   status        text not null default 'waiting' check (status in ('waiting', 'paired', 'done', 'withdrawn')),
   times_paired  int  not null default 0,
   created_at    timestamptz not null default now(),
@@ -48,8 +49,7 @@ revoke all on public.dinner_pairs   from anon, authenticated;
 insert into public.settings (key, value) values
   ('dinner_enabled', 'false'),
   ('dinner_age_gap', '3'),
-  ('dinner_missionary_contact', ''),
-  ('dinner_intro_sms', 'Hi {first}! You''re taking the missionaries to dinner with {other} — text them at {other_phone} to pick a night that works for you both, then set it up with the missionaries ({missionaries}). Thanks for signing up! — North Point YSA')
+  ('dinner_intro_sms', 'Hi {first}! You’ve been set up on a blind date with {other} — text them at {other_phone} to pick a night that works for you both. Have fun! — North Point YSA')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------

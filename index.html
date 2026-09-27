@@ -64,9 +64,9 @@
             <span><span class="label">Meet with the Bishop</span><span class="sub">Interviews, temple recommends, or just to talk</span></span>
             <span class="chev" id="chev-bishop"></span>
           </a>
-          <a class="help-link dinner" href="dinner.html" id="dinner-link" hidden>
+          <a class="help-link dinner" href="blind-date.html" id="dinner-link" hidden>
             <span class="icon" id="icon-dinner"></span>
-            <span><span class="label">Dinner with the missionaries</span><span class="sub">Get paired with someone, take the missionaries out to eat</span></span>
+            <span><span class="label">Blind date</span><span class="sub">Get paired with someone in the ward close to your age — then plan the date.</span></span>
             <span class="chev" id="chev-dinner"></span>
           </a>
         </nav>
@@ -90,7 +90,7 @@
   </main>
 
   <script src="config.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script src="posts.js?v=12"></script>
   <script>
     (function () {
@@ -107,7 +107,7 @@
       document.getElementById('chev-bishop').innerHTML = icons.chevron;
       document.getElementById('icon-dinner').innerHTML = icons.dinner;
       document.getElementById('chev-dinner').innerHTML = icons.chevron;
-      // the missionary-dinner sign-up shows only while leaders have it switched on
+      // the blind-date sign-up shows only while leaders have it switched on
       NP.rpc('dinner_status').then(s => { if (s && s.enabled) document.getElementById('dinner-link').hidden = false; }).catch(() => {});
 
       const links = document.getElementById('links');
